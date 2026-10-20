@@ -39,7 +39,11 @@ function vendorChunk(id: string): string | undefined {
   if (/node_modules\/(dexie|dexie-react-hooks)\//.test(id)) return 'vendor-dexie'
 }
 
+// '/' locally; '/clinic-register/' for GitHub Pages (set by the deploy workflow).
+const BASE = process.env.VITE_BASE || '/'
+
 export default defineConfig({
+  base: BASE,
   build: {
     rollupOptions: { output: { manualChunks: vendorChunk } },
   },
@@ -55,17 +59,17 @@ export default defineConfig({
       filename: 'sw.ts',
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
-        id: '/',
+        id: BASE,
         name: 'Clinic Register',
         short_name: 'Clinic',
         description: 'Offline-first outpatient register for a homeopathy clinic: patients, visits, prescriptions, billing and stock.',
         lang: 'en-IN',
-        scope: '/',
+        scope: BASE,
         categories: ['medical', 'productivity'],
         theme_color: '#17805e',
         background_color: '#f8fafc',
         display: 'standalone',
-        start_url: '/',
+        start_url: BASE,
         // PNGs come from scripts/make-icons.mjs.
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },

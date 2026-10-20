@@ -12,7 +12,7 @@ declare const self: ServiceWorkerGlobalScope
 // navigations. No skipWaiting/clientsClaim: the app's update prompt decides.
 cleanupOutdatedCaches()
 precacheAndRoute(self.__WB_MANIFEST)
-registerRoute(new NavigationRoute(createHandlerBoundToURL('/index.html')))
+registerRoute(new NavigationRoute(createHandlerBoundToURL(`${import.meta.env.BASE_URL}index.html`)))
 
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') self.skipWaiting()
@@ -29,7 +29,7 @@ async function backgroundCheck() {
   await d.open()
   try {
     await runReminderCheck(d, (n) =>
-      self.registration.showNotification(n.title, { body: n.body, tag: n.tag, icon: '/icon-192.png', badge: '/icon-192.png', data: { url: n.url } }),
+      self.registration.showNotification(n.title, { body: n.body, tag: n.tag, icon: `${import.meta.env.BASE_URL}icon-192.png`, badge: `${import.meta.env.BASE_URL}icon-192.png`, data: { url: n.url } }),
     )
   } finally {
     d.close()
@@ -57,7 +57,8 @@ self.addEventListener('notificationclick', (event) => {
         client.postMessage({ type: 'navigate', url })
         return
       }
-      await self.clients.openWindow(url)
+      // url is a router path ('/billing'); a new window needs the deploy base.
+      await self.clients.openWindow(new URL(url.replace(/^\//, ''), self.registration.scope).href)
     })(),
   )
 })

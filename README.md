@@ -50,11 +50,23 @@ See `../opd-register-requirements.md` and `../opd-register-design.md` for scope 
 | Variable | Needed | Meaning |
 |---|---|---|
 | `VITE_GOOGLE_CLIENT_ID` | yes | OAuth web client ID. Without it the app shows "Google sign-in is not configured". It is public (it ends up in the JS bundle). |
+| `VITE_BASE` | only for sub-path hosting | Path the app is served from, with leading and trailing slash (e.g. `/clinic-register/` for GitHub Pages). Defaults to `/`. |
 | `VITE_DRIVE_API_BASE`, `VITE_DRIVE_UPLOAD_BASE` | **never in production** | Dev/E2E only: point sync at `scripts/mock-drive.mjs`. A `localhost` value also turns on a dummy-token bypass. Leave unset for real deployments. |
 
 These are build-time variables (Vite inlines them), so set them in the hosting provider's build settings or `.env.production.local`, then rebuild.
 
-### 3. Deploy (Netlify or Cloudflare Pages)
+### 3a. Deploy to GitHub Pages (set up)
+
+`.github/workflows/deploy.yml` runs lint, tests and the build on every push to `master`, then publishes to `https://<user>.github.io/<repo>/`. One-time setup:
+
+1. Repo **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+2. Repo **Settings → Secrets and variables → Actions → Variables** tab → add `VITE_GOOGLE_CLIENT_ID`. It is a variable, not a secret, because the client ID is public.
+3. In Google Cloud, add `https://<user>.github.io` to the OAuth client's authorised JavaScript origins. Use the origin only: no `/clinic-register` path.
+4. Push to `master`, or run the workflow manually from the Actions tab.
+
+The workflow builds with `VITE_BASE=/<repo>/` and copies `index.html` to `404.html`. GitHub Pages has no rewrite rules, so this is what lets a deep link like `/clinic-register/patients/…` load the app on first visit; after that the service worker serves every route. `_redirects`/`_headers` are ignored by GitHub Pages. Pages sets a 10-minute cache on everything, so a new deploy can take up to 10 minutes before the update prompt appears.
+
+### 3b. Deploy to Netlify or Cloudflare Pages
 
 Any static host works. Settings for both providers:
 

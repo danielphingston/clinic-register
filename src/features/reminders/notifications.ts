@@ -25,7 +25,7 @@ async function swRegistration(): Promise<ServiceWorkerRegistration | undefined> 
 // Through the service worker when there is one (required on Android, and its
 // notificationclick handler focuses the app); a page Notification otherwise.
 export async function showReminder(n: ReminderNotification): Promise<void> {
-  const options = { body: n.body, tag: n.tag, icon: '/icon-192.png', badge: '/icon-192.png', data: { url: n.url } }
+  const options = { body: n.body, tag: n.tag, icon: `${import.meta.env.BASE_URL}icon-192.png`, badge: `${import.meta.env.BASE_URL}icon-192.png`, data: { url: n.url } }
   const reg = await swRegistration()
   if (reg?.active) {
     await reg.showNotification(n.title, options)

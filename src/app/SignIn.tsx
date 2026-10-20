@@ -23,7 +23,7 @@ export function SignIn() {
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
       <div className="card w-full max-w-sm text-center">
-        <img src="/icon.svg" alt="" className="mx-auto h-14 w-14" />
+        <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" className="mx-auto h-14 w-14" />
         <h1 className="mt-4 text-xl font-semibold">Clinic Register</h1>
         <p className="mt-2 text-sm text-slate-600">
           Sign in with Google to keep your clinic data synced to your Google Drive. Data is stored on this device

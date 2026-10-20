@@ -90,10 +90,14 @@ const FUTURE = {
   v7_skipActionErrorRevalidation: true,
 } as const
 
+// Router paths stay '/patients' etc.; the deploy base ('/clinic-register/' on
+// GitHub Pages) is prefixed by the router.
+const BASENAME = import.meta.env.BASE_URL.replace(/\/$/, '') || '/'
+
 export default function App() {
   // A data router (needed for useBlocker), created once per mount so tests
   // start at the current URL.
-  const [router] = useState(() => createBrowserRouter(routes, { future: FUTURE }))
+  const [router] = useState(() => createBrowserRouter(routes, { future: FUTURE, basename: BASENAME }))
   return (
     <AuthProvider>
       <RouterProvider router={router} future={{ v7_startTransition: true }} />

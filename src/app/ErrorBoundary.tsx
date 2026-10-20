@@ -63,7 +63,7 @@ function ErrorScreen({ error, stack }: { error: Error; stack?: string }) {
         <button className="btn-primary" onClick={() => void reloadApp(chunk)}>
           Reload
         </button>
-        <a href="/" className="btn-ghost border border-slate-300">
+        <a href={import.meta.env.BASE_URL} className="btn-ghost border border-slate-300">
           Go to dashboard
         </a>
       </div>
