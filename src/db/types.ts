@@ -1,0 +1,180 @@
+// Every synced record carries these fields. `deleted` is a tombstone so
+// deletions propagate through Drive sync instead of being lost.
+export interface BaseRecord {
+  id: string
+  createdAt: number
+  updatedAt: number
+  deleted: 0 | 1
+}
+
+export type Sex = 'M' | 'F' | 'O'
+
+export interface Patient extends BaseRecord {
+  opNo: string
+  name: string
+  dob?: string // ISO date
+  age?: number // used when DOB unknown
+  ageAsOf?: string // ISO date the age was recorded, so it can advance over time
+  sex?: Sex
+  phone?: string
+  address?: string
+  notes?: string
+}
+
+export interface CaseNotes {
+  complaint?: string
+  history?: string
+  mentals?: string
+  generals?: string
+  modalities?: string
+  constitution?: string
+}
+
+export interface Visit extends BaseRecord {
+  patientId: string
+  date: string // ISO date
+  caseNotes: CaseNotes
+  advice?: string
+  followUpDate?: string
+}
+
+export interface PrescriptionItem extends BaseRecord {
+  visitId: string
+  patientId: string
+  remedyId: string
+  potency: string
+  dose?: string
+  repetition?: string
+  durationDays?: number
+  order?: number // position in the prescription
+  stockItemId?: string
+  qtyDispensed?: number
+}
+
+export type AttachmentKind = 'lab' | 'photo' | 'other'
+
+export interface Attachment extends BaseRecord {
+  patientId: string
+  visitId?: string
+  kind: AttachmentKind
+  mime: string
+  fileName: string
+  originalSize: number
+  size: number
+  blobHash: string
+  caption?: string
+  pages?: number // PDFs only, when known
+}
+
+// Content-addressed file store. Not a BaseRecord: blobs are immutable and
+// uploaded once per hash.
+export interface StoredBlob {
+  hash: string
+  blob: Blob
+  synced: 0 | 1
+}
+
+export type AppointmentStatus = 'booked' | 'arrived' | 'done' | 'no-show' | 'cancelled'
+
+export interface Appointment extends BaseRecord {
+  patientId: string
+  start: number // epoch ms
+  end: number
+  status: AppointmentStatus
+  token?: number
+  notes?: string
+}
+
+export interface BillItem {
+  desc: string
+  amount: number
+  stockItemId?: string
+  qty?: number
+  // Counter sale: this bill itself takes `qty` out of stock (a 'dispense'
+  // move with refId = bill id). Lines copied from a visit's dispensing leave
+  // it unset, because the visit already moved the stock.
+  sale?: true
+}
+
+export interface Bill extends BaseRecord {
+  billNo: string
+  patientId: string
+  visitId?: string
+  date: string
+  items: BillItem[]
+  discount: number
+  total: number
+  paid: number
+  balance: number
+  dueDate?: string
+}
+
+export type PaymentMode = 'cash' | 'upi' | 'card' | 'other'
+
+export interface Payment extends BaseRecord {
+  billId: string
+  patientId: string
+  amount: number
+  mode: PaymentMode
+  date: string
+  receiptNo: string
+}
+
+export interface Remedy extends BaseRecord {
+  name: string
+  abbrev?: string
+  isCustom: 0 | 1
+}
+
+export type StockForm = 'globules' | 'dilution' | 'tablet' | 'mother-tincture' | 'other'
+
+export interface StockItem extends BaseRecord {
+  remedyId: string
+  potency: string
+  form: StockForm
+  qty: number
+  unit: string
+  lowStockAt: number
+  price: number
+}
+
+export type StockMoveReason = 'purchase' | 'dispense' | 'adjust'
+
+export interface StockMove extends BaseRecord {
+  stockItemId: string
+  delta: number
+  reason: StockMoveReason
+  date: string // ISO date the stock physically moved
+  refId?: string // dispense moves: PrescriptionItem id (visit) or Bill id (counter sale)
+  note?: string
+}
+
+// A consulting session within a day, as local "HH:MM" times.
+export interface ClinicSession {
+  start: string
+  end: string
+}
+
+export interface ClinicSettings {
+  clinicName: string
+  doctorName: string
+  qualification: string
+  regNo: string
+  address: string
+  phone: string
+  email: string
+  opPrefix: string
+  whatsappDueTemplate: string
+  consultationFee: number
+  defaultDueDays: number
+  encryptDrive: boolean
+  sessions: ClinicSession[]
+  slotMinutes: number
+}
+
+// Key/value store for settings, sequence counters and sync metadata.
+export interface KV<T = unknown> {
+  key: string
+  value: T
+  updatedAt: number
+}

@@ -1,0 +1,3 @@
+# SPA fallback (Netlify and Cloudflare Pages): real files are served first;
+# every other path gets the app shell, and the router takes over.
+/*    /index.html   200

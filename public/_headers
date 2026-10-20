@@ -1,0 +1,14 @@
+# Netlify and Cloudflare Pages both read this file.
+# The service worker, the app shell and the manifest must be revalidated on
+# every load so a new deploy is picked up (the app then shows "A new version
+# is available"). Hashed assets never change and can be cached forever.
+/sw.js
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/
+  Cache-Control: no-cache
+/manifest.webmanifest
+  Cache-Control: no-cache
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

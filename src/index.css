@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-brand-600 text-white hover:bg-brand-700;
+  }
+  .btn-ghost {
+    @apply btn text-slate-700 hover:bg-slate-100;
+  }
+  .input {
+    @apply w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500;
+  }
+  .label {
+    @apply mb-1 block text-sm font-medium text-slate-700;
+  }
+  .card {
+    @apply rounded-lg border border-slate-200 bg-white p-4;
+  }
+}
+
+@layer base {
+  /* Visible keyboard focus everywhere (buttons get a ring via .btn). */
+  a:focus-visible,
+  button:focus-visible,
+  [tabindex]:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid #17805e;
+    outline-offset: 2px;
+  }
+}
+
+/* Lazy-route spinner: invisible for the first 200 ms so cached chunks don't flash it. */
+.animate-fade-in-delayed {
+  animation: fade-in 0.2s ease-out 0.2s both;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* FullCalendar theming. */
+.fc {
+  --fc-button-bg-color: #ffffff;
+  --fc-button-border-color: #cbd5e1;
+  --fc-button-text-color: #334155;
+  --fc-button-hover-bg-color: #f1f5f9;
+  --fc-button-hover-border-color: #cbd5e1;
+  --fc-button-active-bg-color: #17805e;
+  --fc-button-active-border-color: #17805e;
+  --fc-today-bg-color: #effaf6;
+  --fc-now-indicator-color: #dc2626;
+}
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+  color: #ffffff;
+}
+.fc .fc-button {
+  font-size: 0.875rem;
+}
+/* Keep the sticky day headings below the app's sticky header. */
+.fc .fc-scrollgrid-section-sticky > * {
+  top: 3.0625rem;
+}
+@media (max-width: 767px) {
+  .fc .fc-toolbar-title {
+    font-size: 1.05rem;
+  }
+  .fc .fc-button {
+    padding: 0.3em 0.6em;
+  }
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  .no-print {
+    display: none !important;
+  }
+  /* Long report tables: repeat the header on every page, never split a row. */
+  .report-table thead {
+    display: table-header-group;
+  }
+  .report-table tfoot {
+    display: table-row-group;
+  }
+  .report-table tr {
+    break-inside: avoid;
+  }
+}
