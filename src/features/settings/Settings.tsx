@@ -9,7 +9,7 @@ import { SyncSettings } from '../sync/SyncSettings'
 import { validateSessions } from '../appointments/clinicHours'
 import { NotificationSettings } from '../reminders/NotificationSettings'
 import { ExportAllCard } from '../reports/ExportAllCard'
-import { numInputValue, numFromInput } from '../../lib/format'
+import { NumberInput } from '../../app/NumberInput'
 
 const FIELDS: { key: keyof ClinicSettings; label: string; multiline?: boolean }[] = [
   { key: 'clinicName', label: 'Clinic name' },
@@ -150,15 +150,14 @@ export function Settings() {
           <label className="label" htmlFor="slotMinutes">
             Default slot (minutes)
           </label>
-          <input
+          <NumberInput
             id="slotMinutes"
-            type="number"
             min={5}
             max={120}
             step={5}
             className="input"
-            value={numInputValue(form.slotMinutes)}
-            onChange={(e) => set('slotMinutes', numFromInput(e.target.value))}
+            value={form.slotMinutes}
+            onChange={(n) => set('slotMinutes', n)}
           />
         </div>
         <h2 className="border-t border-slate-100 pt-4 font-semibold">Billing</h2>
@@ -167,14 +166,13 @@ export function Settings() {
             <label className="label" htmlFor="consultationFee">
               Consultation fee (₹)
             </label>
-            <input
+            <NumberInput
               id="consultationFee"
-              type="number"
               min={0}
               inputMode="decimal"
               className="input"
-              value={numInputValue(form.consultationFee)}
-              onChange={(e) => set('consultationFee', numFromInput(e.target.value))}
+              value={form.consultationFee}
+              onChange={(n) => set('consultationFee', n)}
             />
             <p className="mt-1 text-xs text-slate-500">Prefilled on bills made from a visit.</p>
           </div>
@@ -182,14 +180,13 @@ export function Settings() {
             <label className="label" htmlFor="defaultDueDays">
               Default due period (days)
             </label>
-            <input
+            <NumberInput
               id="defaultDueDays"
-              type="number"
               min={1}
               max={365}
               className="input"
-              value={numInputValue(form.defaultDueDays)}
-              onChange={(e) => set('defaultDueDays', numFromInput(e.target.value))}
+              value={form.defaultDueDays}
+              onChange={(n) => set('defaultDueDays', n)}
             />
           </div>
           <div className="sm:col-span-2">
