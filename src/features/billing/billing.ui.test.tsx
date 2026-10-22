@@ -237,4 +237,25 @@ describe('billing UI', () => {
     expect(bill.items).toEqual([{ desc: 'Arsenicum album 30C × 4 ml', amount: 10, stockItemId: item.id, qty: 4, sale: true }])
     expect((await db.stockItems.get(item.id))?.qty).toBe(46)
   })
+  it('fills the blank row instead of adding another, and focuses what to fill next', async () => {
+    const p = await createPatient({ name: 'Mira' })
+    const user = userEvent.setup()
+    open(`/patients/${p.id}`)
+    await user.click(await screen.findByRole('button', { name: 'New bill' }))
+    const d = within(await screen.findByRole('dialog', { name: 'New bill' }))
+    expect(d.getAllByTestId('bill-row')).toHaveLength(1)
+
+    await user.click(d.getByRole('button', { name: '+ Medicines' }))
+    expect(d.getAllByTestId('bill-row')).toHaveLength(1)
+    expect(d.getByLabelText('Item 1')).toHaveValue('Medicines')
+    expect(d.getByLabelText('Amount 1')).toHaveFocus()
+
+    await user.click(d.getByRole('button', { name: '+ Item' }))
+    expect(d.getAllByTestId('bill-row')).toHaveLength(2)
+    expect(d.getByLabelText('Item 2')).toHaveFocus()
+    // The new row is still blank, so "+ Item" goes back to it.
+    await user.click(d.getByRole('button', { name: '+ Item' }))
+    expect(d.getAllByTestId('bill-row')).toHaveLength(2)
+    expect(d.getByLabelText('Item 2')).toHaveFocus()
+  })
 })

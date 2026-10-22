@@ -74,3 +74,14 @@ export function timeAgo(ms: number, now = Date.now()): string {
   const d = Math.round(h / 24)
   return d === 1 ? '1 day ago' : `${d} days ago`
 }
+
+// Controlled numeric inputs keep a number in state. An emptied field is held as
+// NaN (and shown blank) so it can be cleared before typing, instead of snapping
+// back to 0; form validation then rejects it if it's still blank on save.
+export function numInputValue(n: number): number | '' {
+  return Number.isFinite(n) ? n : ''
+}
+
+export function numFromInput(s: string): number {
+  return s.trim() === '' ? NaN : Number(s)
+}

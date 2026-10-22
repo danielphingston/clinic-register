@@ -9,6 +9,7 @@ import { SyncSettings } from '../sync/SyncSettings'
 import { validateSessions } from '../appointments/clinicHours'
 import { NotificationSettings } from '../reminders/NotificationSettings'
 import { ExportAllCard } from '../reports/ExportAllCard'
+import { numInputValue, numFromInput } from '../../lib/format'
 
 const FIELDS: { key: keyof ClinicSettings; label: string; multiline?: boolean }[] = [
   { key: 'clinicName', label: 'Clinic name' },
@@ -50,7 +51,7 @@ export function Settings() {
     const sessionError = validateSessions(form.sessions)
     if (sessionError) return setError(sessionError)
     if (!(form.slotMinutes >= 5 && form.slotMinutes <= 120)) return setError('Slot length must be 5–120 minutes')
-    if (!(form.consultationFee >= 0)) return setError('Consultation fee cannot be negative')
+    if (!(form.consultationFee >= 0)) return setError('Enter a consultation fee of 0 or more')
     if (!(Number.isInteger(form.defaultDueDays) && form.defaultDueDays >= 1 && form.defaultDueDays <= 365))
       return setError('Default due days must be 1–365')
     if (!form.whatsappDueTemplate.trim()) return setError('Enter a WhatsApp reminder message')
@@ -156,8 +157,8 @@ export function Settings() {
             max={120}
             step={5}
             className="input"
-            value={form.slotMinutes}
-            onChange={(e) => set('slotMinutes', Number(e.target.value))}
+            value={numInputValue(form.slotMinutes)}
+            onChange={(e) => set('slotMinutes', numFromInput(e.target.value))}
           />
         </div>
         <h2 className="border-t border-slate-100 pt-4 font-semibold">Billing</h2>
@@ -172,8 +173,8 @@ export function Settings() {
               min={0}
               inputMode="decimal"
               className="input"
-              value={form.consultationFee}
-              onChange={(e) => set('consultationFee', Number(e.target.value))}
+              value={numInputValue(form.consultationFee)}
+              onChange={(e) => set('consultationFee', numFromInput(e.target.value))}
             />
             <p className="mt-1 text-xs text-slate-500">Prefilled on bills made from a visit.</p>
           </div>
@@ -187,8 +188,8 @@ export function Settings() {
               min={1}
               max={365}
               className="input"
-              value={form.defaultDueDays}
-              onChange={(e) => set('defaultDueDays', Number(e.target.value))}
+              value={numInputValue(form.defaultDueDays)}
+              onChange={(e) => set('defaultDueDays', numFromInput(e.target.value))}
             />
           </div>
           <div className="sm:col-span-2">

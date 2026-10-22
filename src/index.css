@@ -47,6 +47,45 @@
   }
 }
 
+/* Page and dialog transitions: short and subtle so they read as smooth rather
+   than slow. Dropped entirely for people who ask for reduced motion. */
+.animate-page-in {
+  animation: page-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-backdrop-in {
+  animation: fade-in 0.18s ease-out both;
+}
+.animate-dialog-in {
+  animation: dialog-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-page-in,
+  .animate-backdrop-in,
+  .animate-dialog-in {
+    animation: none;
+  }
+}
+
 /* FullCalendar theming. */
 .fc {
   --fc-button-bg-color: #ffffff;

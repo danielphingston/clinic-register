@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Modal } from '../../app/Modal'
 import { db } from '../../db/db'
 import type { AppointmentStatus } from '../../db/types'
-import { formatDate, toISODate } from '../../lib/format'
+import { formatDate, numFromInput, numInputValue, toISODate } from '../../lib/format'
 import { allowedTransitions, reschedule, setStatus } from './appointmentRepo'
 import { StatusBadge } from './StatusBadge'
 import { combineDateTime, formatTime, toTimeInput } from './time'
@@ -65,6 +65,7 @@ export function AppointmentDialog({ id, onClose }: { id: string; onClose: () => 
 
   async function saveReschedule(e: FormEvent) {
     e.preventDefault()
+    if (!(duration >= 5)) return setError('Enter at least 5 minutes')
     const s = combineDateTime(date, time)
     if (await run(() => reschedule(a.id, s, s.getTime() + duration * 60_000))) setEditing(false)
   }
@@ -125,8 +126,8 @@ export function AppointmentDialog({ id, onClose }: { id: string; onClose: () => 
                   min={5}
                   step={5}
                   className="input"
-                  value={duration}
-                  onChange={(e) => setDuration(Number(e.target.value))}
+                  value={numInputValue(duration)}
+                  onChange={(e) => setDuration(numFromInput(e.target.value))}
                 />
               </div>
             </div>
