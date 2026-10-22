@@ -10,6 +10,7 @@ import { byRxOrder, visitsForPatient } from '../visits/visitRepo'
 import { PatientAppointments } from '../appointments/PatientAppointments'
 import { PatientDues } from '../billing/PatientDues'
 import { PatientAttachments } from '../attachments/PatientAttachments'
+import { PatientCertificates } from '../certificates/PatientCertificates'
 
 export function PatientProfile() {
   const { id = '' } = useParams()
@@ -120,9 +121,10 @@ export function PatientProfile() {
           </ol>
         </section>
 
-        <aside aria-label="Appointments, billing and attachments" className="space-y-4">
+        <aside aria-label="Appointments, billing, certificates and attachments" className="space-y-4">
           <PatientAppointments patient={patient} />
           <PatientDues patient={patient} newBillVisitId={billVisit} onNewBillClosed={() => setParams({}, { replace: true })} />
+          <PatientCertificates patient={patient} />
           <PatientAttachments patientId={patient.id} />
         </aside>
       </div>

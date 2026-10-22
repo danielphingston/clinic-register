@@ -12,6 +12,7 @@ See `../opd-register-requirements.md` and `../opd-register-design.md` for scope 
 - **Billing:** bills from a visit (consultation fee + dispensed medicines), counter sales from stock, discounts, part payments, FIFO collection across bills, receipts (amount in words), voids and payment reversals, dues list with ageing and WhatsApp reminders.
 - **Stock:** medicines by remedy/potency/form, purchases, adjustments, dispensing from the visit or a counter sale, full history, low-stock alerts.
 - **Reports:** OP register, patients, revenue, collections, dues, top remedies, stock usage, appointments; date presets, charts, A4 print and Excel export.
+- **Certificates:** "To whom it may concern" medicine certificates (remedies prefilled from a visit) and medical (rest) certificates, numbered `CERT-2026-00001`, with wording from editable templates in Settings. Cancelled certificates stay in the patient's list. The clinic logo, the doctor's signature and a seal are uploaded in Settings; signatures and stamps are cleaned to ink on a transparent background. The signature and seal are added only when ticked on the print page, every time.
 - **Attachments:** photos and PDFs per patient/visit, compressed on the device, synced to Drive.
 - **Reminders:** header bell and optional daily notifications (appointments, follow-ups, overdue dues, low stock).
 - **Sync and safety:** works fully offline; automatic Drive sync across devices; optional passphrase encryption of the Drive copy; JSON backup/restore and "Export all data" to Excel.

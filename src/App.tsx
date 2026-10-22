@@ -27,6 +27,7 @@ const PrintRx = lazyPage(() => import('./print/PrintRx'), 'PrintRx')
 const PrintOpSlip = lazyPage(() => import('./print/PrintOpSlip'), 'PrintOpSlip')
 const PrintReceipt = lazyPage(() => import('./print/PrintReceipt'), 'PrintReceipt')
 const PrintBill = lazyPage(() => import('./print/PrintBill'), 'PrintBill')
+const PrintCertificate = lazyPage(() => import('./print/PrintCertificate'), 'PrintCertificate')
 const PrintReport = lazyPage(() => import('./print/PrintReport'), 'default')
 // Dev-only demo data; the DEV check lets production builds drop the chunk.
 const SeedPage = import.meta.env.DEV ? lazyPage(() => import('./dev/SeedPage'), 'default') : null
@@ -60,6 +61,7 @@ const routes = createRoutesFromElements(
     <Route path="print/op-slip/:patientId" element={<Page><PrintOpSlip /></Page>} />
     <Route path="print/receipt/:paymentId" element={<Page><PrintReceipt /></Page>} />
     <Route path="print/bill/:billId" element={<Page><PrintBill /></Page>} />
+    <Route path="print/certificate/:certId" element={<Page><PrintCertificate /></Page>} />
     <Route path="print/report/:type" element={<Page><PrintReport /></Page>} />
     {/* Layout wraps its outlet in the same error boundary and suspense. */}
     <Route element={<Layout />}>

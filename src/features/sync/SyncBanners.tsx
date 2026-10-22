@@ -9,6 +9,8 @@ import type { RenumberNotice } from '../../sync/types'
 import { PassphraseForm } from './PassphraseForm'
 import { useNow } from './syncLabels'
 
+const NOTICE_LABEL: Record<RenumberNotice['table'], string> = { patients: 'Patient', bills: 'Bill', certificates: 'Certificate' }
+
 // Advisory banners above the page content. None of them block work.
 export function SyncBanners() {
   return (
@@ -94,7 +96,7 @@ function NoticesBanner() {
       <ul className="mt-1 list-disc pl-5">
         {notices.slice(-5).map((n) => (
           <li key={`${n.id}-${n.at}`}>
-            {n.table === 'patients' ? 'Patient' : 'Bill'} {n.from} → <span className="font-medium">{n.to}</span>
+            {NOTICE_LABEL[n.table]} {n.from} → <span className="font-medium">{n.to}</span>
           </li>
         ))}
       </ul>
