@@ -50,7 +50,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
 
   return (
     <div
-      className="no-print fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 sm:items-center sm:p-4"
+      className="animate-backdrop-in no-print fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 sm:items-center sm:p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}
@@ -61,7 +61,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="max-h-[90vh] w-full overflow-y-auto rounded-t-xl bg-white p-4 shadow-xl outline-none sm:max-w-md sm:rounded-xl"
+        className="animate-dialog-in max-h-[90vh] w-full overflow-y-auto rounded-t-xl bg-white p-4 shadow-xl outline-none sm:max-w-md sm:rounded-xl"
       >
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 id={titleId} className="text-lg font-semibold">

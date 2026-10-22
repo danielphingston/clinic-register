@@ -20,8 +20,12 @@ const NAV = [
   { to: '/settings', label: 'Settings', icon: '⚙' },
 ]
 
+// The Bills/Dues tabs are one page; switching between them shouldn't replay the
+// page transition (or remount it and lose its state).
+const pageKey = (pathname: string) => pathname.replace(/^\/billing\/dues$/, '/billing')
+
 function navClass({ isActive }: { isActive: boolean }) {
-  return `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${
+  return `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 ${
     isActive ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-100'
   }`
 }
@@ -65,7 +69,10 @@ export function Layout() {
           <SyncBanners />
           <ErrorBoundary resetKey={pathname}>
             <Suspense fallback={<PageLoading />}>
-              <Outlet />
+              {/* Keyed so each page mounts fresh and plays the enter transition. */}
+              <div key={pageKey(pathname)} className="animate-page-in">
+                <Outlet />
+              </div>
             </Suspense>
           </ErrorBoundary>
         </main>

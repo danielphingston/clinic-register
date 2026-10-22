@@ -23,6 +23,8 @@ interface Row {
 
 let rowSeq = 0
 const row = (desc = '', amount = '', extra: Partial<Row> = {}): Row => ({ key: `r${++rowSeq}`, desc, amount, ...extra })
+const isBlank = (r: Row) => !r.desc.trim() && !r.amount.trim()
+const fieldId = (key: string, field: 'desc' | 'amount') => `bill-${key}-${field}`
 
 function rowsFromItems(items: BillItem[]): Row[] {
   return items.map((i) => row(i.desc, String(i.amount), { stockItemId: i.stockItemId, qty: i.qty, sale: i.sale }))
@@ -51,6 +53,16 @@ export function BillDialog({
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState<{ bill: Bill; payment?: Payment } | null>(null)
   const [picking, setPicking] = useState(false)
+  const [focusTo, setFocusTo] = useState<{ key: string; field: 'desc' | 'amount' } | null>(null)
+
+  // Focus a row's field after it's been added (runs once the row is rendered).
+  useEffect(() => {
+    if (!focusTo) return
+    const el = document.getElementById(fieldId(focusTo.key, focusTo.field)) as HTMLInputElement | null
+    el?.focus()
+    el?.select()
+    setFocusTo(null)
+  }, [focusTo])
 
   useEffect(() => {
     let cancelled = false
@@ -81,6 +93,26 @@ export function BillDialog({
   const alreadyPaid = bill?.paid ?? 0
   const payNow = editing ? 0 : parseAmount(payAmount) || 0
   const balance = round2(total - alreadyPaid - payNow)
+
+  // Fills the first blank row with the new line instead of piling blank rows up
+  // above it; appends only when every row is in use. Then focuses the next field
+  // to fill in (the amount when the description is already set).
+  function addRow(r: Row) {
+    setRows((rs) => {
+      const i = rs.findIndex(isBlank)
+      if (i === -1) return [...rs, r]
+      // Blank rows past the first are just clutter once one has been filled.
+      return rs.flatMap((x, n) => (n === i ? [r] : isBlank(x) ? [] : [x]))
+    })
+    setFocusTo({ key: r.key, field: r.desc && !r.amount ? 'amount' : 'desc' })
+    setError('')
+  }
+
+  function addBlankRow() {
+    const blank = rows.find(isBlank)
+    if (blank) setFocusTo({ key: blank.key, field: 'desc' })
+    else addRow(row())
+  }
 
   function setRow(key: string, changes: Partial<Row>) {
     setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...changes } : r)))
@@ -189,6 +221,7 @@ export function BillDialog({
             <div key={r.key} data-testid="bill-row">
             <div className="flex gap-2">
               <input
+                id={fieldId(r.key, 'desc')}
                 className="input min-w-0 flex-1"
                 aria-label={`Item ${i + 1}`}
                 placeholder="Description"
@@ -197,11 +230,13 @@ export function BillDialog({
                 onChange={(e) => setRow(r.key, { desc: e.target.value })}
               />
               <input
+                id={fieldId(r.key, 'amount')}
                 className="input w-28 text-right"
                 aria-label={`Amount ${i + 1}`}
                 placeholder="₹"
                 inputMode="decimal"
                 value={r.amount}
+                onFocus={(e) => e.target.select()}
                 onChange={(e) => setRow(r.key, { amount: e.target.value })}
               />
               <button
@@ -229,12 +264,8 @@ export function BillDialog({
             <StockSalePicker
               onCancel={() => setPicking(false)}
               onAdd={(l) => {
-                setRows((rs) => [
-                  ...rs.filter((r) => r.desc || r.amount),
-                  row(l.desc, String(l.amount), { stockItemId: l.stockItemId, qty: l.qty, sale: true, unpriced: !(l.amount > 0) }),
-                ])
+                addRow(row(l.desc, l.amount > 0 ? String(l.amount) : '', { stockItemId: l.stockItemId, qty: l.qty, sale: true, unpriced: !(l.amount > 0) }))
                 setPicking(false)
-                setError('')
               }}
             />
           )}
@@ -244,7 +275,7 @@ export function BillDialog({
                 + Medicine from stock
               </button>
             )}
-            <button type="button" className="btn-ghost border border-slate-300 px-3 py-1" onClick={() => setRows((rs) => [...rs, row('Medicines')])}>
+            <button type="button" className="btn-ghost border border-slate-300 px-3 py-1" onClick={() => addRow(row('Medicines'))}>
               + Medicines
             </button>
             {!rows.some((r) => r.desc === 'Consultation') && (
@@ -253,13 +284,13 @@ export function BillDialog({
                 className="btn-ghost border border-slate-300 px-3 py-1"
                 onClick={async () => {
                   const s = await getSettings()
-                  setRows((rs) => [...rs.filter((r) => r.desc || r.amount), row('Consultation', s.consultationFee > 0 ? String(s.consultationFee) : '')])
+                  addRow(row('Consultation', s.consultationFee > 0 ? String(s.consultationFee) : ''))
                 }}
               >
                 + Consultation
               </button>
             )}
-            <button type="button" className="btn-ghost border border-dashed border-slate-300 px-3 py-1" onClick={() => setRows((rs) => [...rs, row()])}>
+            <button type="button" className="btn-ghost border border-dashed border-slate-300 px-3 py-1" onClick={addBlankRow}>
               + Item
             </button>
           </div>
