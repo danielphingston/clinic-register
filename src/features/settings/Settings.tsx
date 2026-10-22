@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
 import { getSettings, saveSettings } from '../../db/repo'
-import type { ClinicSettings } from '../../db/types'
+import type { CandidateLine, CertificateKind, CertTypeSettings, ClinicSettings, LetterheadStyle } from '../../db/types'
 import { RemediesSettings } from '../remedies/RemediesSettings'
 import { StorageCard } from '../attachments/StorageCard'
 import { SyncSettings } from '../sync/SyncSettings'
@@ -10,7 +10,7 @@ import { validateSessions } from '../appointments/clinicHours'
 import { NotificationSettings } from '../reminders/NotificationSettings'
 import { ExportAllCard } from '../reports/ExportAllCard'
 import { NumberInput } from '../../app/NumberInput'
-import { PLACEHOLDERS } from '../certificates/certificateRepo'
+import { KIND_LABEL, PLACEHOLDERS } from '../certificates/certificateRepo'
 import { BrandingSettings } from './BrandingSettings'
 
 const FIELDS: { key: keyof ClinicSettings; label: string; multiline?: boolean }[] = [
@@ -23,6 +23,104 @@ const FIELDS: { key: keyof ClinicSettings; label: string; multiline?: boolean }[
   { key: 'address', label: 'Address', multiline: true },
   { key: 'opPrefix', label: 'OP number prefix' },
 ]
+
+const LETTERHEAD_LABEL: Record<LetterheadStyle, string> = {
+  classic: 'Classic: logo and name left, address right',
+  centered: 'Centred: logo above a full-width name',
+  logoLeft: 'Logo left: large serif name, contacts with icons',
+  image: 'Uploaded letterhead image',
+}
+
+const CANDIDATE_LABEL: Record<CandidateLine, string> = {
+  bottom: 'Bottom left',
+  top: 'Top right, above the title',
+  none: "Don't print",
+}
+
+const CERT_KINDS = Object.keys(KIND_LABEL) as CertificateKind[]
+
+const WATERMARK_LABEL: Record<CertTypeSettings['watermark'], string> = {
+  default: 'Same as above',
+  on: 'On',
+  off: 'Off',
+}
+
+function CertTypeFields({ kind, value, onChange }: { kind: CertificateKind; value: CertTypeSettings; onChange: (v: CertTypeSettings) => void }) {
+  const id = (f: string) => `cert-${kind}-${f}`
+  const put = <K extends keyof CertTypeSettings>(key: K, v: CertTypeSettings[K]) => onChange({ ...value, [key]: v })
+  return (
+    <fieldset className="space-y-3 rounded-md border border-slate-200 p-3" aria-label={KIND_LABEL[kind]}>
+      <legend className="px-1 text-sm font-semibold">{KIND_LABEL[kind]}</legend>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <label className="label" htmlFor={id('title')}>
+            Title
+          </label>
+          <input id={id('title')} className="input" value={value.title} onChange={(e) => put('title', e.target.value)} />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="label" htmlFor={id('letterhead')}>
+            Letterhead
+          </label>
+          <select
+            id={id('letterhead')}
+            className="input"
+            value={value.letterheadStyle}
+            onChange={(e) => put('letterheadStyle', e.target.value as CertTypeSettings['letterheadStyle'])}
+          >
+            <option value="default">Same as the clinic letterhead style</option>
+            {(Object.keys(LETTERHEAD_LABEL) as LetterheadStyle[]).map((k) => (
+              <option key={k} value={k}>
+                {LETTERHEAD_LABEL[k]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label" htmlFor={id('watermark')}>
+            Watermark
+          </label>
+          <select
+            id={id('watermark')}
+            className="input"
+            value={value.watermark}
+            onChange={(e) => put('watermark', e.target.value as CertTypeSettings['watermark'])}
+          >
+            {(Object.keys(WATERMARK_LABEL) as CertTypeSettings['watermark'][]).map((k) => (
+              <option key={k} value={k}>
+                {WATERMARK_LABEL[k]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label" htmlFor={id('candidate')}>
+            "Signature of the candidate" line
+          </label>
+          <select
+            id={id('candidate')}
+            className="input"
+            value={value.candidateLine}
+            onChange={(e) => put('candidateLine', e.target.value as CandidateLine)}
+          >
+            {(Object.keys(CANDIDATE_LABEL) as CandidateLine[]).map((k) => (
+              <option key={k} value={k}>
+                {CANDIDATE_LABEL[k]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="sm:col-span-2">
+          <label className="label" htmlFor={id('template')}>
+            Wording
+          </label>
+          <textarea id={id('template')} rows={4} className="input" value={value.template} onChange={(e) => put('template', e.target.value)} />
+          {kind === 'medicine' && <p className="mt-1 text-xs text-slate-500">The list of medicines is printed below this text.</p>}
+        </div>
+      </div>
+    </fieldset>
+  )
+}
 
 export function Settings() {
   const { profile, signOut } = useAuth()
@@ -57,7 +155,10 @@ export function Settings() {
     if (!(Number.isInteger(form.defaultDueDays) && form.defaultDueDays >= 1 && form.defaultDueDays <= 365))
       return setError('Default due days must be 1–365')
     if (!form.whatsappDueTemplate.trim()) return setError('Enter a WhatsApp reminder message')
-    if (!form.certMedicineTemplate.trim() || !form.certMedicalTemplate.trim()) return setError('Enter the wording for both certificates')
+    for (const k of CERT_KINDS) {
+      if (!form.certTypes[k].title.trim() || !form.certTypes[k].template.trim())
+        return setError(`Enter a title and wording for the ${KIND_LABEL[k].toLowerCase()}`)
+    }
     setError('')
     const normalized = {
       ...form,
@@ -100,6 +201,29 @@ export function Settings() {
               )}
             </div>
           ))}
+        </div>
+
+        <div className="max-w-md">
+          <label className="label" htmlFor="letterheadStyle">
+            Letterhead style
+          </label>
+          <select
+            id="letterheadStyle"
+            className="input"
+            value={form.letterheadStyle}
+            onChange={(e) => set('letterheadStyle', e.target.value as LetterheadStyle)}
+          >
+            {(Object.keys(LETTERHEAD_LABEL) as LetterheadStyle[]).map((k) => (
+              <option key={k} value={k}>
+                {LETTERHEAD_LABEL[k]}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-slate-500">
+            {form.letterheadStyle === 'image'
+              ? 'Upload the image under "Letterhead image" below. Until then the classic style is used.'
+              : 'Used on every printout. The logo is uploaded below.'}
+          </p>
         </div>
 
         <h2 className="border-t border-slate-100 pt-4 font-semibold">Clinic hours</h2>
@@ -217,34 +341,17 @@ export function Settings() {
             </label>
             <input id="certPlace" className="input" value={form.certPlace} onChange={(e) => set('certPlace', e.target.value)} />
           </div>
-          <div>
-            <label className="label" htmlFor="certMedicineTemplate">
-              Medicine certificate wording
-            </label>
-            <textarea
-              id="certMedicineTemplate"
-              rows={4}
-              className="input"
-              value={form.certMedicineTemplate}
-              onChange={(e) => set('certMedicineTemplate', e.target.value)}
-            />
-            <p className="mt-1 text-xs text-slate-500">The list of medicines is printed below this text.</p>
-          </div>
-          <div>
-            <label className="label" htmlFor="certMedicalTemplate">
-              Medical (rest) certificate wording
-            </label>
-            <textarea
-              id="certMedicalTemplate"
-              rows={4}
-              className="input"
-              value={form.certMedicalTemplate}
-              onChange={(e) => set('certMedicalTemplate', e.target.value)}
-            />
-            <p className="mt-1 text-xs text-slate-500">
-              Placeholders: {PLACEHOLDERS}. Each certificate's wording can still be edited before printing.
-            </p>
-          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={form.certWatermark} onChange={(e) => set('certWatermark', e.target.checked)} />
+            Faint logo watermark in the middle of the page
+          </label>
+          <p className="text-xs text-slate-500">
+            Each type below can use its own letterhead style and watermark instead. Placeholders for the wording: {PLACEHOLDERS}.
+            Each certificate's wording can still be edited before printing.
+          </p>
+          {CERT_KINDS.map((k) => (
+            <CertTypeFields key={k} kind={k} value={form.certTypes[k]} onChange={(v) => set('certTypes', { ...form.certTypes, [k]: v })} />
+          ))}
         </div>
 
         {error && (

@@ -1,6 +1,6 @@
 import { db } from '../../db/db'
 import { newRecord, nextSequence, softDelete, update } from '../../db/repo'
-import type { Certificate, CertificateKind, ClinicSettings, Patient } from '../../db/types'
+import type { Certificate, CertificateKind, ClinicSettings, LetterheadStyle, Patient } from '../../db/types'
 import { currentAge } from '../../lib/age'
 import { formatDate, parseISODate } from '../../lib/format'
 import { remedyMap } from '../remedies/remedyRepo'
@@ -14,14 +14,13 @@ export const KIND_LABEL: Record<CertificateKind, string> = {
   medical: 'Medical certificate (rest)',
 }
 
-export const DEFAULT_TITLE: Record<CertificateKind, string> = {
-  medicine: 'To Whom It May Concern',
-  medical: 'Medical Certificate',
-}
-
-export const TEMPLATE_KEY: Record<CertificateKind, 'certMedicineTemplate' | 'certMedicalTemplate'> = {
-  medicine: 'certMedicineTemplate',
-  medical: 'certMedicalTemplate',
+// Letterhead and watermark for a type: its own choice, or the clinic's.
+export function certLayout(settings: ClinicSettings, kind: CertificateKind): { letterhead: LetterheadStyle; watermark: boolean } {
+  const t = settings.certTypes[kind]
+  return {
+    letterhead: t.letterheadStyle === 'default' ? settings.letterheadStyle : t.letterheadStyle,
+    watermark: t.watermark === 'default' ? settings.certWatermark : t.watermark === 'on',
+  }
 }
 
 export const PLACEHOLDERS = '{name} {age} {sex} {opNo} {condition} {from} {to} {date} {doctor} {clinic}'

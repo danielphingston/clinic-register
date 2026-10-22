@@ -7,6 +7,7 @@ import { saveSettings, DEFAULT_SETTINGS, setBrandingImage } from '../../db/repo'
 import { createPatient } from '../patients/patientRepo'
 import { addCustomRemedy } from '../remedies/remedyRepo'
 import { saveVisit } from '../visits/visitRepo'
+import { createCertificate } from './certificateRepo'
 
 vi.mock('../../auth/google', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../auth/google')>()),
@@ -82,5 +83,39 @@ describe('certificates UI', () => {
     await user.click(within(again).getByRole('button', { name: 'Yes, cancel' }))
     expect(await within(again).findByText(/cancelled/)).toBeInTheDocument()
     expect(within(again).queryByRole('button', { name: `Edit ${cert.certNo}` })).not.toBeInTheDocument()
+  })
+
+  it('applies the type\'s own letterhead, watermark and candidate line', async () => {
+    await saveSettings({
+      ...DEFAULT_SETTINGS,
+      clinicName: 'Test Clinic',
+      address: 'Road 1\nKochi',
+      letterheadStyle: 'classic',
+      certWatermark: false,
+      certTypes: {
+        ...DEFAULT_SETTINGS.certTypes,
+        medical: { ...DEFAULT_SETTINGS.certTypes.medical, letterheadStyle: 'centered', watermark: 'on', candidateLine: 'top' },
+      },
+    })
+    await setBrandingImage('logo', PNG)
+    const p = await createPatient({ name: 'Deepa' })
+    const medical = await createCertificate({ kind: 'medical', patientId: p.id, date: '2026-02-22', title: 'Medical Certificate', body: 'Rest.' })
+    const medicine = await createCertificate({ kind: 'medicine', patientId: p.id, date: '2026-02-22', title: 'To Whom', body: 'Meds.' })
+
+    const view = open(`/print/certificate/${medical.id}`)
+    const heading = await screen.findByRole('heading', { name: 'Medical Certificate' })
+    // Centred letterhead joins the address onto one line.
+    expect(await screen.findByText('Road 1, Kochi')).toBeInTheDocument()
+    expect(document.querySelectorAll('img[src="' + PNG + '"]')).toHaveLength(2) // logo + watermark
+    const candidate = screen.getByText(/Signature of the candidate/)
+    expect(candidate.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    view.unmount()
+
+    open(`/print/certificate/${medicine.id}`)
+    await screen.findByRole('heading', { name: 'To Whom' })
+    // Medicine follows the clinic defaults: classic letterhead, no watermark, no candidate line.
+    expect(await screen.findByText('Kochi', { exact: false })).toHaveClass('whitespace-pre-line')
+    expect(document.querySelectorAll('img[src="' + PNG + '"]')).toHaveLength(1)
+    expect(screen.queryByText(/Signature of the candidate/)).not.toBeInTheDocument()
   })
 })

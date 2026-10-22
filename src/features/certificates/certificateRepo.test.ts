@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { db } from '../../db/db'
-import { DEFAULT_SETTINGS } from '../../db/repo'
+import { DEFAULT_SETTINGS, getSettings, setKV } from '../../db/repo'
 import type { Patient } from '../../db/types'
 import { createPatient } from '../patients/patientRepo'
 import { addCustomRemedy } from '../remedies/remedyRepo'
@@ -30,7 +30,7 @@ describe('certificate wording', () => {
   const patient = { name: 'Deepa K H', opNo: 'OP-2026-00012', age: 47, ageAsOf: '2026-01-01', sex: 'F' } as Patient
 
   it('fills placeholders and leaves blanks to write in', () => {
-    const text = fillTemplate(DEFAULT_SETTINGS.certMedicalTemplate, patient, DEFAULT_SETTINGS, {
+    const text = fillTemplate(DEFAULT_SETTINGS.certTypes.medical.template, patient, DEFAULT_SETTINGS, {
       date: '2026-02-22',
       condition: 'Intervertebral disc prolapse',
       restFrom: '2026-02-22',
@@ -93,5 +93,12 @@ describe('certificateRepo', () => {
       items: [{ remedyId: r.id, potency: '200C', repetition: 'TDS' }],
     })
     expect(await medicinesFromVisit(visitId)).toEqual(['Allium cepa 200C (TDS)'])
+  })
+
+  it('fills per-type settings missing from older saved settings with defaults', async () => {
+    await setKV('settings', { clinicName: 'X', certTypes: { medical: { title: 'Rest certificate' } } })
+    const s = await getSettings()
+    expect(s.certTypes.medical).toEqual({ ...DEFAULT_SETTINGS.certTypes.medical, title: 'Rest certificate' })
+    expect(s.certTypes.medicine).toEqual(DEFAULT_SETTINGS.certTypes.medicine)
   })
 })
