@@ -1,4 +1,4 @@
-import { useRef, type InputHTMLAttributes } from 'react'
+import type { InputHTMLAttributes } from 'react'
 import { numFromInput, numInputValue } from '../lib/format'
 
 type Props = Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'onChange'> & {
@@ -7,21 +7,16 @@ type Props = Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'onC
 }
 
 // Numeric input that can be emptied while typing (held as NaN) instead of
-// snapping to 0. Leaving it empty puts back the value it had on focus.
-export function NumberInput({ value, onChange, onFocus, onBlur, ...rest }: Props) {
-  const before = useRef(value)
+// snapping to 0. Leaving it empty fills in 0, or the field's min if it has one.
+export function NumberInput({ value, onChange, onBlur, ...rest }: Props) {
   return (
     <input
       {...rest}
       type="number"
       value={numInputValue(value)}
-      onFocus={(e) => {
-        before.current = value
-        onFocus?.(e)
-      }}
       onChange={(e) => onChange(numFromInput(e.target.value))}
       onBlur={(e) => {
-        if (!Number.isFinite(value)) onChange(before.current)
+        if (!Number.isFinite(value)) onChange(rest.min != null ? Number(rest.min) : 0)
         onBlur?.(e)
       }}
     />

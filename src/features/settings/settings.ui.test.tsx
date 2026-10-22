@@ -14,7 +14,7 @@ vi.mock('../../auth/google', async (importOriginal) => ({
 vi.setConfig({ testTimeout: 20_000 })
 
 describe('settings number fields', () => {
-  it('can be cleared before typing a new value, and goes back to the old one if left blank', async () => {
+  it('can be cleared before typing a new value, and falls back to a default if left blank', async () => {
     await saveSettings({ ...(await getSettings()), consultationFee: 300 })
     localStorage.setItem('auth:profile', JSON.stringify({ sub: '1', email: 'd@x.com', name: 'D' }))
     window.history.replaceState(null, '', '/settings')
@@ -25,7 +25,13 @@ describe('settings number fields', () => {
     await user.clear(fee)
     expect(fee).toHaveValue(null)
     await user.tab()
-    expect(fee).toHaveValue(300)
+    expect(fee).toHaveValue(0)
+
+    // Fields with a minimum fall back to it rather than to 0.
+    const dueDays = screen.getByLabelText('Default due period (days)')
+    await user.clear(dueDays)
+    await user.tab()
+    expect(dueDays).toHaveValue(1)
 
     await user.clear(fee)
     await user.type(fee, '450')

@@ -77,7 +77,7 @@ export function timeAgo(ms: number, now = Date.now()): string {
 
 // Controlled numeric inputs keep a number in state. An emptied field is held as
 // NaN (and shown blank) so it can be cleared before typing, instead of snapping
-// back to 0. See NumberInput, which restores the old value if left blank.
+// back to 0. See NumberInput, which fills in a default if left blank.
 export function numInputValue(n: number): number | '' {
   return Number.isFinite(n) ? n : ''
 }
