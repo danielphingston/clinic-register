@@ -4,7 +4,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Modal } from '../../app/Modal'
 import { db } from '../../db/db'
 import type { AppointmentStatus } from '../../db/types'
-import { formatDate, numFromInput, numInputValue, toISODate } from '../../lib/format'
+import { formatDate, toISODate } from '../../lib/format'
+import { NumberInput } from '../../app/NumberInput'
 import { allowedTransitions, reschedule, setStatus } from './appointmentRepo'
 import { StatusBadge } from './StatusBadge'
 import { combineDateTime, formatTime, toTimeInput } from './time'
@@ -120,14 +121,13 @@ export function AppointmentDialog({ id, onClose }: { id: string; onClose: () => 
                 <label className="label" htmlFor="rs-dur">
                   Minutes
                 </label>
-                <input
+                <NumberInput
                   id="rs-dur"
-                  type="number"
                   min={5}
                   step={5}
                   className="input"
-                  value={numInputValue(duration)}
-                  onChange={(e) => setDuration(numFromInput(e.target.value))}
+                  value={duration}
+                  onChange={setDuration}
                 />
               </div>
             </div>

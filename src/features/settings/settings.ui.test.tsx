@@ -14,7 +14,7 @@ vi.mock('../../auth/google', async (importOriginal) => ({
 vi.setConfig({ testTimeout: 20_000 })
 
 describe('settings number fields', () => {
-  it('can be cleared before typing a new value, and a blank one is rejected on save', async () => {
+  it('can be cleared before typing a new value, and goes back to the old one if left blank', async () => {
     await saveSettings({ ...(await getSettings()), consultationFee: 300 })
     localStorage.setItem('auth:profile', JSON.stringify({ sub: '1', email: 'd@x.com', name: 'D' }))
     window.history.replaceState(null, '', '/settings')
@@ -24,9 +24,10 @@ describe('settings number fields', () => {
     const fee = await screen.findByLabelText('Consultation fee (₹)')
     await user.clear(fee)
     expect(fee).toHaveValue(null)
-    await user.click(screen.getByRole('button', { name: 'Save' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Enter a consultation fee of 0 or more')
+    await user.tab()
+    expect(fee).toHaveValue(300)
 
+    await user.clear(fee)
     await user.type(fee, '450')
     expect(fee).toHaveValue(450)
     await user.click(screen.getByRole('button', { name: 'Save' }))
