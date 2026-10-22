@@ -25,3 +25,8 @@ dist-ssr
 
 .env
 .env.local
+
+# Real logos, signatures and seals belong in the app (Settings), never in the repo.
+/private/
+signature.*
+seal.*

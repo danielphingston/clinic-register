@@ -150,6 +150,34 @@ export interface StockMove extends BaseRecord {
 }
 
 // A consulting session within a day, as local "HH:MM" times.
+export type CertificateKind = 'medicine' | 'medical'
+
+// An issued certificate. The wording is stored as printed, so a reprint
+// matches the original even after the templates change. Cancelling one is a
+// soft delete: the number stays used.
+export interface Certificate extends BaseRecord {
+  certNo: string
+  kind: CertificateKind
+  patientId: string
+  visitId?: string
+  date: string // ISO date of issue
+  place?: string
+  title: string
+  body: string
+  condition?: string
+  restFrom?: string // medical: ISO dates of advised rest
+  restTo?: string
+  medicines?: string[] // medicine: one line per medicine
+}
+
+// Images for printouts, as data URLs. Kept apart from ClinicSettings so the
+// settings form never rewrites them, and so they can be cleared on their own.
+export interface Branding {
+  logo?: string
+  signature?: string
+  seal?: string
+}
+
 export interface ClinicSession {
   start: string
   end: string
@@ -170,6 +198,9 @@ export interface ClinicSettings {
   encryptDrive: boolean
   sessions: ClinicSession[]
   slotMinutes: number
+  certPlace: string
+  certMedicineTemplate: string
+  certMedicalTemplate: string
 }
 
 // Key/value store for settings, sequence counters and sync metadata.

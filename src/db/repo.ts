@@ -1,6 +1,6 @@
 import type { EntityTable } from 'dexie'
 import { db } from './db'
-import type { BaseRecord, ClinicSettings } from './types'
+import type { BaseRecord, Branding, ClinicSettings } from './types'
 
 type NewRecord<T extends BaseRecord> = Omit<T, keyof BaseRecord>
 
@@ -81,6 +81,11 @@ export const DEFAULT_SETTINGS: ClinicSettings = {
     { start: '17:00', end: '20:00' },
   ],
   slotMinutes: 15,
+  certPlace: '',
+  certMedicineTemplate:
+    'This is to certify that {name} ({age}, OP No. {opNo}) is under my treatment for {condition}.\n\nI also certify that the medicines listed below are prepared according to homoeopathic principles and do not contain alcoholic or sedative contents.',
+  certMedicalTemplate:
+    'This is to certify that {name} ({age}, OP No. {opNo}) was under my treatment for {condition} and was advised rest from {from} to {to}.',
 }
 
 export async function getSettings(): Promise<ClinicSettings> {
@@ -90,4 +95,19 @@ export async function getSettings(): Promise<ClinicSettings> {
 
 export async function saveSettings(settings: ClinicSettings): Promise<void> {
   await setKV('settings', settings)
+}
+
+// ---- branding (logo, signature, seal) ----
+
+export async function getBranding(): Promise<Branding> {
+  return (await getKV<Branding>('branding')) ?? {}
+}
+
+export async function setBrandingImage(key: keyof Branding, dataUrl: string | undefined): Promise<void> {
+  await db.transaction('rw', db.kv, async () => {
+    const next = { ...(await getBranding()) }
+    if (dataUrl) next[key] = dataUrl
+    else delete next[key]
+    await setKV('branding', next)
+  })
 }

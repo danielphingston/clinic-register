@@ -1,6 +1,6 @@
 import type { Table } from 'dexie'
 import type { ClinicDB } from '../db/db'
-import type { BaseRecord, Bill, KV, Patient, Payment, StockItem, StockMove } from '../db/types'
+import type { BaseRecord, Bill, Certificate, KV, Patient, Payment, StockItem, StockMove } from '../db/types'
 import { roundQty } from '../features/stock/stockLogic'
 import { toISODate, todayISO } from '../lib/format'
 import { diffMerge, type SyncRecord } from './merge'
@@ -37,9 +37,12 @@ export interface ApplyResult {
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 
-const UNIQUE: Partial<Record<SyncTableName, { field: 'opNo' | 'billNo'; counter: string }>> = {
+type UniqueField = 'opNo' | 'billNo' | 'certNo'
+
+const UNIQUE: Partial<Record<SyncTableName, { field: UniqueField; counter: string }>> = {
   patients: { field: 'opNo', counter: 'op' },
   bills: { field: 'billNo', counter: 'bill' },
+  certificates: { field: 'certNo', counter: 'cert' },
 }
 
 // <prefix>-<YYYY>-<n>, as made by nextOpNo / billing.
@@ -70,7 +73,7 @@ export async function applyRecords(db: ClinicDB, table: SyncTableName, incoming:
 
     const uniq = UNIQUE[table]
     if (uniq && writes.length) {
-      const res = await dedupeNumbers(db, table as 'patients' | 'bills', uniq, local, writes, opts)
+      const res = await dedupeNumbers(db, table as RenumberNotice['table'], uniq, local, writes, opts)
       writes = res.writes as typeof writes
       if (res.renumbered) localNewer = true
     }
@@ -119,13 +122,13 @@ function noteTouched(table: SyncTableName, writes: SyncRecord[], local: SyncReco
   }
 }
 
-// After a merge, two different records may carry the same OP or bill number
+// After a merge, two different records may carry the same OP, bill or certificate number
 // (two devices numbered offline). The older record keeps it; each newer one
 // gets the next free number and a visible notice. Nothing is dropped.
 async function dedupeNumbers(
   db: ClinicDB,
-  table: 'patients' | 'bills',
-  uniq: { field: 'opNo' | 'billNo'; counter: string },
+  table: RenumberNotice['table'],
+  uniq: { field: UniqueField; counter: string },
   local: SyncRecord[],
   writes: SyncRecord[],
   opts: ApplyOptions,
@@ -205,14 +208,14 @@ export async function recomputeDerived(db: ClinicDB, touched: Touched): Promise<
 
 // Sequence counters are per device and not synced. After pulling another
 // device's records, move each counter past the highest number in use so the
-// next OP / bill / receipt / token here can't repeat one.
+// next OP / bill / receipt / certificate / token here can't repeat one.
 export async function bumpCounters(db: ClinicDB): Promise<void> {
   const max = new Map<string, number>()
   const see = (key: string, n: number) => {
     if (Number.isFinite(n) && n > (max.get(key) ?? 0)) max.set(key, n)
   }
   const today = todayISO()
-  await db.transaction('rw', [db.patients, db.bills, db.payments, db.appointments, db.kv], async (tx) => {
+  await db.transaction('rw', [db.patients, db.bills, db.payments, db.certificates, db.appointments, db.kv], async (tx) => {
     tagTx(tx, true)
     await db.patients.each((p: Patient) => {
       const m = NUMBER_RE.exec(p.opNo ?? '')
@@ -225,6 +228,10 @@ export async function bumpCounters(db: ClinicDB): Promise<void> {
     await db.payments.each((p: Payment) => {
       const m = NUMBER_RE.exec(p.receiptNo ?? '')
       if (m) see(`rcpt:${m[2]}`, Number(m[3]))
+    })
+    await db.certificates.each((c: Certificate) => {
+      const m = NUMBER_RE.exec(c.certNo ?? '')
+      if (m) see(`cert:${m[2]}`, Number(m[3]))
     })
     const dayStart = new Date(`${today}T00:00:00`).getTime()
     await db.appointments

@@ -11,9 +11,9 @@ import type Dexie from 'dexie'
 
 export const SYNC_APPLY = '__syncApply'
 export const KV_TABLE = 'kv'
-// The only kv entry that syncs; the rest (sequence counters, sync state, the
+// The kv entries that sync; the rest (sequence counters, sync state, the
 // cached key, owner) are per device.
-export const SYNCED_KV_KEYS = ['settings']
+export const SYNCED_KV_KEYS = ['settings', 'branding']
 
 export type Counts = Record<string, number>
 

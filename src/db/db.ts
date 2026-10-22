@@ -5,6 +5,7 @@ import type {
   Appointment,
   Attachment,
   Bill,
+  Certificate,
   KV,
   Patient,
   Payment,
@@ -28,6 +29,7 @@ export class ClinicDB extends Dexie {
   remedies!: EntityTable<Remedy, 'id'>
   stockItems!: EntityTable<StockItem, 'id'>
   stockMoves!: EntityTable<StockMove, 'id'>
+  certificates!: EntityTable<Certificate, 'id'>
   kv!: EntityTable<KV, 'key'>
 
   // A name other than the default is only used by tests (e.g. a second
@@ -60,6 +62,8 @@ export class ClinicDB extends Dexie {
             if (!m.date) m.date = toISODate(new Date(m.createdAt))
           }),
       )
+    // v3: issued certificates.
+    this.version(3).stores({ certificates: 'id, &certNo, patientId, visitId, date, updatedAt, deleted' })
     installChangeTracking(this, SYNCED_TABLES)
   }
 }
@@ -76,6 +80,7 @@ export const SYNCED_TABLES = [
   'remedies',
   'stockItems',
   'stockMoves',
+  'certificates',
 ] as const
 
 export type SyncedTable = (typeof SYNCED_TABLES)[number]

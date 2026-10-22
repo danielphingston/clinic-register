@@ -10,6 +10,8 @@ import { validateSessions } from '../appointments/clinicHours'
 import { NotificationSettings } from '../reminders/NotificationSettings'
 import { ExportAllCard } from '../reports/ExportAllCard'
 import { NumberInput } from '../../app/NumberInput'
+import { PLACEHOLDERS } from '../certificates/certificateRepo'
+import { BrandingSettings } from './BrandingSettings'
 
 const FIELDS: { key: keyof ClinicSettings; label: string; multiline?: boolean }[] = [
   { key: 'clinicName', label: 'Clinic name' },
@@ -55,6 +57,7 @@ export function Settings() {
     if (!(Number.isInteger(form.defaultDueDays) && form.defaultDueDays >= 1 && form.defaultDueDays <= 365))
       return setError('Default due days must be 1–365')
     if (!form.whatsappDueTemplate.trim()) return setError('Enter a WhatsApp reminder message')
+    if (!form.certMedicineTemplate.trim() || !form.certMedicalTemplate.trim()) return setError('Enter the wording for both certificates')
     setError('')
     const normalized = {
       ...form,
@@ -72,7 +75,7 @@ export function Settings() {
 
       <form onSubmit={handleSubmit} className="card mt-4 space-y-4">
         <h2 className="font-semibold">Clinic profile</h2>
-        <p className="text-sm text-slate-500">Shown on prescriptions, receipts and OP slips.</p>
+        <p className="text-sm text-slate-500">Shown on prescriptions, receipts, OP slips and certificates.</p>
         <div className="grid gap-4 sm:grid-cols-2">
           {FIELDS.map((f) => (
             <div key={f.key} className={f.multiline ? 'sm:col-span-2' : ''}>
@@ -206,6 +209,44 @@ export function Settings() {
           </div>
         </div>
 
+        <h2 className="border-t border-slate-100 pt-4 font-semibold">Certificates</h2>
+        <div className="grid gap-4">
+          <div className="max-w-xs">
+            <label className="label" htmlFor="certPlace">
+              Default place
+            </label>
+            <input id="certPlace" className="input" value={form.certPlace} onChange={(e) => set('certPlace', e.target.value)} />
+          </div>
+          <div>
+            <label className="label" htmlFor="certMedicineTemplate">
+              Medicine certificate wording
+            </label>
+            <textarea
+              id="certMedicineTemplate"
+              rows={4}
+              className="input"
+              value={form.certMedicineTemplate}
+              onChange={(e) => set('certMedicineTemplate', e.target.value)}
+            />
+            <p className="mt-1 text-xs text-slate-500">The list of medicines is printed below this text.</p>
+          </div>
+          <div>
+            <label className="label" htmlFor="certMedicalTemplate">
+              Medical (rest) certificate wording
+            </label>
+            <textarea
+              id="certMedicalTemplate"
+              rows={4}
+              className="input"
+              value={form.certMedicalTemplate}
+              onChange={(e) => set('certMedicalTemplate', e.target.value)}
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Placeholders: {PLACEHOLDERS}. Each certificate's wording can still be edited before printing.
+            </p>
+          </div>
+        </div>
+
         {error && (
           <p role="alert" className="text-sm text-red-700">
             {error}
@@ -219,6 +260,8 @@ export function Settings() {
           {saved && <span className="text-sm text-brand-700">Saved</span>}
         </div>
       </form>
+
+      <BrandingSettings />
 
       <RemediesSettings />
 

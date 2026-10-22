@@ -62,7 +62,7 @@ export interface LockInfo {
 
 export interface RenumberNotice {
   at: number
-  table: 'patients' | 'bills'
+  table: 'patients' | 'bills' | 'certificates'
   id: string
   from: string
   to: string

@@ -1,9 +1,22 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getSettings } from '../db/repo'
+import { getBranding, getSettings } from '../db/repo'
 
-export function PrintShell({ title, children, ready, landscape = false }: { title: string; children: ReactNode; ready: boolean; landscape?: boolean }) {
+export function PrintShell({
+  title,
+  children,
+  ready,
+  landscape = false,
+  toolbar,
+}: {
+  title: string
+  children: ReactNode
+  ready: boolean
+  landscape?: boolean
+  // Extra screen-only controls beside the Print button.
+  toolbar?: ReactNode
+}) {
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -20,9 +33,12 @@ export function PrintShell({ title, children, ready, landscape = false }: { titl
         <button className="btn-ghost border border-slate-300" onClick={() => navigate(-1)}>
           ← Back
         </button>
-        <button className="btn-primary" disabled={!ready} onClick={() => window.print()}>
-          Print
-        </button>
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {toolbar}
+          <button className="btn-primary" disabled={!ready} onClick={() => window.print()}>
+            Print
+          </button>
+        </div>
       </div>
       {/* Focusable so keyboard users can scroll the A4 page on narrow screens. */}
       <div className="overflow-x-auto p-4 print:overflow-visible print:p-0" tabIndex={0} role="region" aria-label="Print preview">
@@ -39,15 +55,19 @@ export function PrintShell({ title, children, ready, landscape = false }: { titl
 
 export function Letterhead() {
   const s = useLiveQuery(getSettings)
-  if (!s) return null
+  const logo = useLiveQuery(async () => (await getBranding()).logo ?? null)
+  if (!s || logo === undefined) return null
   const doctor = [s.doctorName, s.qualification].filter(Boolean).join(', ')
   const contact = [s.phone && `Ph: ${s.phone}`, s.email].filter(Boolean).join(' · ')
   return (
     <header className="flex items-start justify-between gap-6 border-b-2 border-brand-700 pb-3">
-      <div>
-        <div className="text-[18pt] font-bold leading-tight text-brand-800">{s.clinicName || 'Clinic'}</div>
-        {doctor && <div className="mt-1 font-semibold">{doctor}</div>}
-        {s.regNo && <div className="text-[9pt] text-slate-600">Reg. No. {s.regNo}</div>}
+      <div className="flex items-center gap-4">
+        {logo && <img src={logo} alt="" className="max-h-[22mm] max-w-[40mm] object-contain" />}
+        <div>
+          <div className="text-[18pt] font-bold leading-tight text-brand-800">{s.clinicName || 'Clinic'}</div>
+          {doctor && <div className="mt-1 font-semibold">{doctor}</div>}
+          {s.regNo && <div className="text-[9pt] text-slate-600">Reg. No. {s.regNo}</div>}
+        </div>
       </div>
       <div className="max-w-[45%] text-right text-[9pt] text-slate-700">
         {s.address && <div className="whitespace-pre-line">{s.address}</div>}
