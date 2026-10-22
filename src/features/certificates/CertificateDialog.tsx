@@ -8,11 +8,9 @@ import { formatDate, todayISO } from '../../lib/format'
 import { visitsForPatient } from '../visits/visitRepo'
 import {
   createCertificate,
-  DEFAULT_TITLE,
   fillTemplate,
   KIND_LABEL,
   medicinesFromVisit,
-  TEMPLATE_KEY,
   updateCertificate,
 } from './certificateRepo'
 
@@ -28,7 +26,8 @@ export function CertificateDialog({ patient, cert, onClose }: { patient: Patient
   const [kind, setKind] = useState<CertificateKind>(cert?.kind ?? 'medicine')
   const [date, setDate] = useState(cert?.date ?? todayISO())
   const [place, setPlace] = useState<string | undefined>(cert?.place)
-  const [title, setTitle] = useState(cert?.title ?? DEFAULT_TITLE.medicine)
+  // undefined = the type's default title from Settings.
+  const [title, setTitle] = useState<string | undefined>(cert?.title)
   const [condition, setCondition] = useState(cert?.condition ?? '')
   const [restFrom, setRestFrom] = useState(cert?.restFrom ?? todayISO())
   const [restTo, setRestTo] = useState(cert?.restTo ?? '')
@@ -46,13 +45,14 @@ export function CertificateDialog({ patient, cert, onClose }: { patient: Patient
   if (!settings || !visits) return null
   const s = settings
 
-  const autoBody = fillTemplate(s[TEMPLATE_KEY[kind]], patient, s, { date, condition, restFrom, restTo: restTo || undefined })
+  const titleValue = title ?? s.certTypes[kind].title
+  const autoBody = fillTemplate(s.certTypes[kind].template, patient, s, { date, condition, restFrom, restTo: restTo || undefined })
   const bodyValue = body ?? autoBody
   const medicinesValue = medicines ?? (rxLines ?? []).join('\n')
   const placeValue = place ?? s.certPlace
 
   function changeKind(k: CertificateKind) {
-    if (title === DEFAULT_TITLE[kind]) setTitle(DEFAULT_TITLE[k])
+    if (title === s.certTypes[kind].title) setTitle(undefined)
     setKind(k)
   }
 
@@ -66,7 +66,7 @@ export function CertificateDialog({ patient, cert, onClose }: { patient: Patient
       visitId: chosenVisit || undefined,
       date,
       place: placeValue,
-      title,
+      title: titleValue,
       body: bodyValue,
       condition,
       restFrom,
@@ -184,7 +184,7 @@ export function CertificateDialog({ patient, cert, onClose }: { patient: Patient
           <label className="label" htmlFor="cert-title">
             Title
           </label>
-          <input id="cert-title" className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <input id="cert-title" className="input" value={titleValue} onChange={(e) => setTitle(e.target.value)} />
         </div>
         <div>
           <div className="flex items-baseline justify-between gap-2">

@@ -10,26 +10,38 @@ interface Slot {
   key: keyof Branding
   label: string
   hint: string
-  // Signatures and stamps are cleaned to ink on transparent; a logo is only resized.
-  ink: boolean
+  // Signatures and stamps are always cleaned to ink on transparent; a logo
+  // is only resized; a letterhead photo can be cleaned if the user asks.
+  ink: 'always' | 'never' | 'optional'
   defaultColor: number // index into INK_COLORS
+  maxSide: number
 }
 
 const SLOTS: Slot[] = [
-  { key: 'logo', label: 'Logo', hint: 'Shown on the letterhead of every printout.', ink: false, defaultColor: 0 },
+  { key: 'logo', label: 'Logo', hint: 'Shown on the letterhead of every printout.', ink: 'never', defaultColor: 0, maxSide: 600 },
+  {
+    key: 'header',
+    label: 'Letterhead image',
+    hint: "Your own letterhead's header (the designer's file, or a straight, flat scan), used when the letterhead style is \"Uploaded letterhead image\". Use the top part of the page only.",
+    ink: 'optional',
+    defaultColor: 2,
+    maxSide: 1600,
+  },
   {
     key: 'signature',
     label: 'Signature',
     hint: 'Sign on plain white paper with a dark pen and take a sharp, well-lit photo from straight above.',
-    ink: true,
+    ink: 'always',
     defaultColor: 0,
+    maxSide: 1200,
   },
   {
     key: 'seal',
     label: 'Seal / stamp',
     hint: 'Stamp on plain white paper and photograph it the same way.',
-    ink: true,
+    ink: 'always',
     defaultColor: 2,
+    maxSide: 1200,
   },
 ]
 
@@ -44,7 +56,7 @@ export function BrandingSettings() {
     <section className="card mt-4 space-y-4" aria-labelledby="branding-heading" data-testid="branding-settings">
       <div>
         <h2 id="branding-heading" className="font-semibold">
-          Logo, signature and seal
+          Logo, letterhead, signature and seal
         </h2>
         <p className="text-sm text-slate-500">
           Used on certificates (the logo on all printouts). Stored on this device and in your clinic's Google Drive, never in
@@ -71,24 +83,25 @@ function ImageSlot({ slot, current }: { slot: Slot; current?: string }) {
   const [color, setColor] = useState(slot.defaultColor)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [clean, setClean] = useState(slot.ink === 'always')
   const debouncedStrength = useDebounced(strength, 150)
 
   const result = useMemo(() => {
     if (!source) return null
     try {
-      const pixels = slot.ink ? extractInk(source, { strength: debouncedStrength, color: INK_COLORS[color].value }) : source
+      const pixels = clean ? extractInk(source, { strength: debouncedStrength, color: INK_COLORS[color].value }) : source
       return { url: pixelsToPngDataUrl(pixels), error: '' }
     } catch (err) {
       return { url: '', error: err instanceof InkError ? err.message : "Couldn't process this image." }
     }
-  }, [source, debouncedStrength, color, slot.ink])
+  }, [source, debouncedStrength, color, clean])
 
   async function pick(file: File | undefined) {
     if (!file) return
     setError('')
     setBusy(true)
     try {
-      setSource(await loadPixels(file, slot.ink ? 1200 : 600))
+      setSource(await loadPixels(file, slot.maxSide))
     } catch (err) {
       setError(err instanceof InkError ? err.message : "Couldn't read this image.")
     } finally {
@@ -145,7 +158,13 @@ function ImageSlot({ slot, current }: { slot: Slot; current?: string }) {
 
       {source && (
         <div className="space-y-3 rounded-md bg-slate-50 p-3">
-          {slot.ink && (
+          {slot.ink === 'optional' && (
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={clean} onChange={(e) => setClean(e.target.checked)} />
+              Clean up a photo's background (makes the paper white)
+            </label>
+          )}
+          {clean && (
             <div className="flex flex-wrap items-end gap-4">
               <div className="min-w-[12rem] flex-1">
                 <label className="label" htmlFor={`${inputId}-strength`}>

@@ -1,6 +1,6 @@
 import type { EntityTable } from 'dexie'
 import { db } from './db'
-import type { BaseRecord, Branding, ClinicSettings } from './types'
+import type { BaseRecord, Branding, CertificateKind, ClinicSettings } from './types'
 
 type NewRecord<T extends BaseRecord> = Omit<T, keyof BaseRecord>
 
@@ -81,16 +81,37 @@ export const DEFAULT_SETTINGS: ClinicSettings = {
     { start: '17:00', end: '20:00' },
   ],
   slotMinutes: 15,
+  letterheadStyle: 'classic',
   certPlace: '',
-  certMedicineTemplate:
-    'This is to certify that {name} ({age}, OP No. {opNo}) is under my treatment for {condition}.\n\nI also certify that the medicines listed below are prepared according to homoeopathic principles and do not contain alcoholic or sedative contents.',
-  certMedicalTemplate:
-    'This is to certify that {name} ({age}, OP No. {opNo}) was under my treatment for {condition} and was advised rest from {from} to {to}.',
+  certWatermark: false,
+  certTypes: {
+    medicine: {
+      title: 'To Whom It May Concern',
+      template:
+        'This is to certify that {name} ({age}, OP No. {opNo}) is under my treatment for {condition}.\n\nI also certify that the medicines listed below are prepared according to homoeopathic principles and do not contain alcoholic or sedative contents.',
+      letterheadStyle: 'default',
+      watermark: 'default',
+      candidateLine: 'none',
+    },
+    medical: {
+      title: 'Medical Certificate',
+      template:
+        'This is to certify that {name} ({age}, OP No. {opNo}) was under my treatment for {condition} and was advised rest from {from} to {to}.',
+      letterheadStyle: 'default',
+      watermark: 'default',
+      candidateLine: 'bottom',
+    },
+  },
 }
 
 export async function getSettings(): Promise<ClinicSettings> {
   const saved = await getKV<Partial<ClinicSettings>>('settings')
-  return { ...DEFAULT_SETTINGS, ...saved }
+  const merged = { ...DEFAULT_SETTINGS, ...saved }
+  // Per-type certificate settings merge field by field, so a type or field
+  // added later gets its default.
+  const types = { ...DEFAULT_SETTINGS.certTypes }
+  for (const k of Object.keys(types) as CertificateKind[]) types[k] = { ...types[k], ...saved?.certTypes?.[k] }
+  return { ...merged, certTypes: types }
 }
 
 export async function saveSettings(settings: ClinicSettings): Promise<void> {

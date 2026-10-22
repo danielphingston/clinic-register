@@ -174,8 +174,25 @@ export interface Certificate extends BaseRecord {
 // settings form never rewrites them, and so they can be cleared on their own.
 export interface Branding {
   logo?: string
+  header?: string // a whole letterhead header, for the 'image' style
   signature?: string
   seal?: string
+}
+
+// classic: logo and name left, address right. centered: logo above a
+// full-width name. logoLeft: big serif name beside the logo, contacts with
+// icons. image: the uploaded header image as is.
+export type LetterheadStyle = 'classic' | 'centered' | 'logoLeft' | 'image'
+
+export type CandidateLine = 'bottom' | 'top' | 'none'
+
+// Per certificate type. 'default' follows the clinic-wide setting.
+export interface CertTypeSettings {
+  title: string
+  template: string
+  letterheadStyle: LetterheadStyle | 'default'
+  watermark: 'default' | 'on' | 'off'
+  candidateLine: CandidateLine
 }
 
 export interface ClinicSession {
@@ -198,9 +215,10 @@ export interface ClinicSettings {
   encryptDrive: boolean
   sessions: ClinicSession[]
   slotMinutes: number
+  letterheadStyle: LetterheadStyle
   certPlace: string
-  certMedicineTemplate: string
-  certMedicalTemplate: string
+  certWatermark: boolean
+  certTypes: Record<CertificateKind, CertTypeSettings>
 }
 
 // Key/value store for settings, sequence counters and sync metadata.

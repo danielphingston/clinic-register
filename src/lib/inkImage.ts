@@ -5,7 +5,7 @@
 //    and uneven light) and divide it out, so the paper becomes pure white.
 // 2. Opacity follows how much darker than the paper a pixel is: paper is
 //    fully transparent and faint stroke edges stay partly visible.
-// 3. Recolour to one ink colour, or keep the original hue (stamps).
+// 3. Recolour to one ink colour, or keep the original colours (stamps).
 // 4. Crop to the ink.
 
 export type RGB = [number, number, number]
@@ -106,8 +106,13 @@ export function extractInk(src: Pixels, opts: InkOptions): Pixels {
         out[i + 1] = opts.color[1]
         out[i + 2] = opts.color[2]
       } else {
-        // Original hue with the paper's tint divided out, slightly deepened.
-        for (let c = 0; c < 3; c++) out[i + c] = Math.min(255, (data[i + c] * 255) / bg) * 0.85
+        // The colour that, at this opacity over white paper, shows the
+        // pixel as it looks with the paper's tint divided out.
+        const a = Math.max(alpha / 255, 1e-3)
+        for (let c = 0; c < 3; c++) {
+          const seen = Math.min(255, (data[i + c] * 255) / bg)
+          out[i + c] = Math.max(0, (seen - (1 - a) * 255) / a)
+        }
       }
       out[i + 3] = alpha
       if (alpha > 24) {
