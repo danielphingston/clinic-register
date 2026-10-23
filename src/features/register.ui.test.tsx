@@ -131,6 +131,35 @@ describe('patients UI', () => {
     expect(await screen.findByText(/No patients yet/)).toBeInTheDocument()
     expect(await db.patients.get(p.id)).toMatchObject({ deleted: 1 })
   })
+
+  it('takes an OP number on create and lets it be edited, rejecting duplicates', async () => {
+    const user = userEvent.setup()
+    const other = await createPatient({ name: 'Ravi' })
+    open('/patients/new')
+    await user.type(await screen.findByLabelText('Name *'), 'Asha')
+    const opNo = screen.getByLabelText('OP / Reg. no')
+    await user.type(opNo, other.opNo)
+    await user.click(screen.getByRole('button', { name: 'Save patient' }))
+    expect(await screen.findByText('OP no is already used by Ravi')).toBeInTheDocument()
+    expect(opNo).toHaveFocus()
+
+    await user.clear(opNo)
+    await user.type(opNo, 'REG-101')
+    await user.click(screen.getByRole('button', { name: 'Save patient' }))
+    expect(await screen.findByRole('heading', { name: 'Asha' })).toBeInTheDocument()
+    expect(screen.getByText('REG-101')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('link', { name: 'Edit' }))
+    const edit = await screen.findByLabelText('OP / Reg. no *')
+    expect(edit).toHaveValue('REG-101')
+    await user.clear(edit)
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    expect(await screen.findByText('OP no is required')).toBeInTheDocument()
+    await user.type(edit, 'REG-102')
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    expect(await screen.findByText('REG-102')).toBeInTheDocument()
+    expect((await db.patients.toArray()).map((p) => p.opNo).sort()).toEqual([other.opNo, 'REG-102'].sort())
+  })
 })
 
 describe('visit UI', () => {

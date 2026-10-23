@@ -4,10 +4,11 @@ import { db } from '../../db/db'
 import type { Patient, Sex } from '../../db/types'
 import { ageFromDob, currentAge, dobFromAge } from '../../lib/age'
 import { todayISO } from '../../lib/format'
-import { createPatient, deletePatient, normalizeIndianMobile, updatePatient } from './patientRepo'
+import { createPatient, deletePatient, normalizeIndianMobile, opNoHolder, updatePatient } from './patientRepo'
 
 interface FormState {
   name: string
+  opNo: string
   dob: string
   age: string
   sex: Sex | ''
@@ -16,12 +17,13 @@ interface FormState {
   notes: string
 }
 
-const EMPTY: FormState = { name: '', dob: '', age: '', sex: '', phone: '', address: '', notes: '' }
+const EMPTY: FormState = { name: '', opNo: '', dob: '', age: '', sex: '', phone: '', address: '', notes: '' }
 
 function fromPatient(p: Patient): FormState {
   const age = currentAge(p, todayISO())
   return {
     name: p.name,
+    opNo: p.opNo,
     dob: p.dob ?? '',
     age: age == null ? '' : String(age),
     sex: p.sex ?? '',
@@ -41,7 +43,6 @@ function PatientFormInner() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [form, setForm] = useState<FormState | null>(id ? null : EMPTY)
-  const [opNo, setOpNo] = useState('')
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({})
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -51,10 +52,7 @@ function PatientFormInner() {
     if (!id) return
     db.patients.get(id).then((p) => {
       if (!p || p.deleted) navigate('/patients', { replace: true })
-      else {
-        setForm(fromPatient(p))
-        setOpNo(p.opNo)
-      }
+      else setForm(fromPatient(p))
     })
   }, [id, navigate])
 
@@ -81,6 +79,11 @@ function PatientFormInner() {
     if (!form) return
     const errs: typeof errors = {}
     if (!form.name.trim()) errs.name = 'Name is required'
+    const opNo = form.opNo.trim()
+    if (opNo) {
+      const holder = await opNoHolder(opNo, id)
+      if (holder) errs.opNo = holder.deleted ? 'OP no is used by a deleted patient' : `OP no is already used by ${holder.name}`
+    } else if (id) errs.opNo = 'OP no is required'
     let phone = ''
     if (form.phone.trim()) {
       const n = normalizeIndianMobile(form.phone)
@@ -91,7 +94,7 @@ function PatientFormInner() {
     const age = form.age.trim() === '' ? undefined : Number(form.age)
     if (!form.dob && age != null && (!Number.isInteger(age) || age < 0 || age > 130)) errs.age = 'Enter age in years'
     setErrors(errs)
-    const first = (['name', 'dob', 'age', 'phone'] as const).find((k) => errs[k])
+    const first = (['name', 'opNo', 'dob', 'age', 'phone'] as const).find((k) => errs[k])
     if (first) {
       document.getElementById(`p-${first}`)?.focus()
       return
@@ -99,6 +102,7 @@ function PatientFormInner() {
 
     const input = {
       name: form.name,
+      opNo: opNo || undefined,
       dob: form.dob || undefined,
       age: form.dob ? undefined : age,
       sex: form.sex || undefined,
@@ -131,27 +135,53 @@ function PatientFormInner() {
   return (
     <div className="max-w-2xl">
       <h1 className="text-2xl font-semibold">{id ? 'Edit patient' : 'New patient'}</h1>
-      {opNo && <p className="mt-1 font-mono text-sm text-slate-500">{opNo}</p>}
 
       <form onSubmit={handleSubmit} className="card mt-4 space-y-4" noValidate>
-        <div>
-          <label className="label" htmlFor="p-name">
-            Name *
-          </label>
-          <input
-            id="p-name"
-            aria-invalid={errors.name ? true : undefined}
-            aria-describedby={errors.name ? 'p-name-error' : undefined}
-            className="input"
-            value={form.name}
-            onChange={(e) => set('name', e.target.value)}
-            autoFocus
-          />
-          {errors.name && (
-            <p id="p-name-error" className="mt-1 text-sm text-red-600">
-              {errors.name}
-            </p>
-          )}
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="sm:col-span-2">
+            <label className="label" htmlFor="p-name">
+              Name *
+            </label>
+            <input
+              id="p-name"
+              aria-invalid={errors.name ? true : undefined}
+              aria-describedby={errors.name ? 'p-name-error' : undefined}
+              className="input"
+              value={form.name}
+              onChange={(e) => set('name', e.target.value)}
+              autoFocus
+            />
+            {errors.name && (
+              <p id="p-name-error" className="mt-1 text-sm text-red-600">
+                {errors.name}
+              </p>
+            )}
+          </div>
+          <div>
+            <label className="label" htmlFor="p-opNo">
+              OP / Reg. no{id ? ' *' : ''}
+            </label>
+            <input
+              id="p-opNo"
+              aria-invalid={errors.opNo ? true : undefined}
+              aria-describedby={errors.opNo ? 'p-opNo-error' : id ? undefined : 'p-opNo-hint'}
+              className="input font-mono"
+              placeholder={id ? undefined : 'Automatic'}
+              value={form.opNo}
+              onChange={(e) => set('opNo', e.target.value)}
+            />
+            {errors.opNo ? (
+              <p id="p-opNo-error" className="mt-1 text-sm text-red-600">
+                {errors.opNo}
+              </p>
+            ) : (
+              !id && (
+                <p id="p-opNo-hint" className="mt-1 text-xs text-slate-500">
+                  Leave blank for the next number
+                </p>
+              )
+            )}
+          </div>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">

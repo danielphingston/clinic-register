@@ -3,7 +3,9 @@ import { insert, nextOpNo, softDelete, update } from '../../db/repo'
 import type { Patient } from '../../db/types'
 import { todayISO } from '../../lib/format'
 
-export type PatientInput = Omit<Patient, 'id' | 'createdAt' | 'updatedAt' | 'deleted' | 'opNo'>
+// opNo is optional: left blank, a new patient gets the next number in sequence
+// and an edited one keeps the number it has.
+export type PatientInput = Omit<Patient, 'id' | 'createdAt' | 'updatedAt' | 'deleted' | 'opNo'> & { opNo?: string }
 
 // Accepts "98765 43210", "+91 98765-43210" or "098765..." and returns the bare
 // 10-digit number, or null if it isn't a valid Indian mobile number.
@@ -15,8 +17,28 @@ export function normalizeIndianMobile(raw: string): string | null {
   return /^[6-9]\d{9}$/.test(digits) ? digits : null
 }
 
-function clean(input: PatientInput): PatientInput {
-  const out: PatientInput = { name: input.name.trim() }
+// The patient (deleted ones included, as the unique index covers them) that
+// already holds this OP number, ignoring case and the patient being edited.
+export async function opNoHolder(opNo: string, exceptId?: string): Promise<Patient | undefined> {
+  const matches = await db.patients.where('opNo').equalsIgnoreCase(opNo.trim()).toArray()
+  return matches.find((p) => p.id !== exceptId)
+}
+
+async function assertOpNoFree(opNo: string, exceptId?: string): Promise<void> {
+  if (await opNoHolder(opNo, exceptId)) throw new Error(`OP no ${opNo} is already in use`)
+}
+
+// Skips numbers already taken by hand, so an entered number that matches the
+// sequence never blocks the next new patient.
+async function autoOpNo(): Promise<string> {
+  for (;;) {
+    const opNo = await nextOpNo()
+    if (!(await opNoHolder(opNo))) return opNo
+  }
+}
+
+function clean(input: PatientInput): Omit<PatientInput, 'opNo'> {
+  const out: Omit<PatientInput, 'opNo'> = { name: input.name.trim() }
   if (input.dob) out.dob = input.dob
   else if (input.age != null && !Number.isNaN(input.age)) {
     out.age = input.age
@@ -32,13 +54,20 @@ function clean(input: PatientInput): PatientInput {
 
 export async function createPatient(input: PatientInput): Promise<Patient> {
   if (!input.name.trim()) throw new Error('Name is required')
-  const opNo = await nextOpNo()
+  const entered = input.opNo?.trim()
+  if (entered) await assertOpNoFree(entered)
+  const opNo = entered || (await autoOpNo())
   return insert<Patient>(db.patients, { ...clean(input), opNo })
 }
 
 export async function updatePatient(id: string, input: PatientInput): Promise<void> {
   if (!input.name.trim()) throw new Error('Name is required')
-  const c = clean(input)
+  const c: Partial<Patient> = clean(input)
+  const opNo = input.opNo?.trim()
+  if (opNo) {
+    await assertOpNoFree(opNo, id)
+    c.opNo = opNo
+  }
   // Explicit undefined clears fields the user emptied.
   await update<Patient>(db.patients, id, {
     dob: undefined,
