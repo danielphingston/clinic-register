@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { db } from '../../db/db'
-import { createPatient, deletePatient, normalizeIndianMobile, searchPatients, updatePatient } from './patientRepo'
+import { createPatient, deletePatient, normalizeIndianMobile, opNoHolder, searchPatients, updatePatient } from './patientRepo'
 
 const year = new Date().getFullYear()
 
@@ -50,5 +50,32 @@ describe('patients', () => {
     expect(u?.age).toBeUndefined()
     expect(u?.phone).toBeUndefined()
     expect(u?.address).toBeUndefined()
+  })
+
+  it('accepts an entered OP number and skips it in the sequence', async () => {
+    const a = await createPatient({ name: 'Asha', opNo: ' 1234 ' })
+    expect(a.opNo).toBe('1234')
+    await createPatient({ name: 'Bala', opNo: `OP-${year}-00001` })
+    // The next automatic number steps over the one taken by hand.
+    expect((await createPatient({ name: 'Chitra' })).opNo).toBe(`OP-${year}-00002`)
+    await expect(createPatient({ name: 'Devi', opNo: 'op-' + year + '-00002' })).rejects.toThrow(/already in use/)
+  })
+
+  it('edits the OP number, keeping it unique and unchanged when left blank', async () => {
+    const a = await createPatient({ name: 'Asha' })
+    const b = await createPatient({ name: 'Bala' })
+    await updatePatient(a.id, { name: 'Asha', opNo: 'REG-77' })
+    expect((await db.patients.get(a.id))?.opNo).toBe('REG-77')
+    // Saving with its own number is fine.
+    await updatePatient(a.id, { name: 'Asha', opNo: 'REG-77' })
+    await updatePatient(a.id, { name: 'Asha M' })
+    expect((await db.patients.get(a.id))?.opNo).toBe('REG-77')
+    await expect(updatePatient(b.id, { name: 'Bala', opNo: 'reg-77' })).rejects.toThrow(/already in use/)
+    expect((await db.patients.get(b.id))?.opNo).toBe(`OP-${year}-00002`)
+
+    // Deleted patients still hold their number.
+    await deletePatient(a.id)
+    expect((await opNoHolder('REG-77'))?.id).toBe(a.id)
+    expect(await opNoHolder('REG-77', a.id)).toBeUndefined()
   })
 })
