@@ -40,6 +40,16 @@ beforeEach(() => {
 })
 
 describe('sign-in screen', () => {
+  it('explains the app, its data handling and links to the source before offering sign-in', () => {
+    render(<App />)
+    expect(screen.getByRole('heading', { name: 'Clinic Register' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Your data and privacy' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Source code on GitHub' })).toHaveAttribute(
+      'href',
+      'https://github.com/danielphingston/clinic-register',
+    )
+  })
+
   it('shows setup instructions when no client ID is configured', () => {
     render(<App />)
     expect(screen.getByText(/Google sign-in is not configured/)).toBeInTheDocument()
