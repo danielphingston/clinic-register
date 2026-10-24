@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#17805e" />
+    <meta name="description" content="Privacy policy for Clinic Register: what Google data it uses, where records are stored and who can see them." />
+    <link rel="icon" type="image/svg+xml" href="icon.svg" />
+    <title>Privacy policy · Clinic Register</title>
+    <!-- Static on purpose: Google's OAuth verification (and anyone without
+         JavaScript) must be able to read this page. Relative links keep it
+         working under any VITE_BASE. -->
+    <style>
+      body {
+        margin: 0;
+        background: #f8fafc;
+        color: #0f172a;
+        font: 16px/1.6 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      }
+      main {
+        max-width: 48rem;
+        margin: 0 auto;
+        padding: 2.5rem 1rem 4rem;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      header img {
+        width: 3rem;
+        height: 3rem;
+      }
+      h1 {
+        margin: 0;
+        font-size: 1.5rem;
+      }
+      h2 {
+        margin-top: 2rem;
+        font-size: 1.125rem;
+      }
+      header p,
+      .muted {
+        margin: 0;
+        color: #475569;
+        font-size: 0.875rem;
+      }
+      a {
+        color: #13664c;
+      }
+      code {
+        font-size: 0.875em;
+      }
+      footer {
+        margin-top: 2.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid #e2e8f0;
+        color: #64748b;
+        font-size: 0.875rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <img src="icon.svg" alt="" />
+        <div>
+          <h1>Privacy policy</h1>
+          <p>Clinic Register · last updated 24 October 2026</p>
+        </div>
+      </header>
+
+      <p>
+        Clinic Register is a free, open-source outpatient register built for one homeopathy clinic. This page explains
+        what information the app uses, where it is kept and who can see it. The app has no server of its own: it runs
+        entirely in your browser.
+      </p>
+
+      <h2>Google account data the app uses</h2>
+      <p>When you sign in with Google, the app asks for these permissions and nothing else:</p>
+      <ul>
+        <li>
+          <strong>Your name, email address and profile picture</strong> (<code>openid</code>, <code>email</code>,
+          <code>profile</code>). Shown in the app's header and settings so you can see which account is signed in.
+          They are kept in this browser only.
+        </li>
+        <li>
+          <strong>A private app folder in your Google Drive</strong> (<code>drive.appdata</code>). The app stores its
+          own data in Drive's hidden application-data folder so the clinic's devices stay in sync. It cannot see, open
+          or change any of your other Drive files, and other apps cannot see this folder.
+        </li>
+      </ul>
+      <p>
+        Sign-in happens on Google's own page (accounts.google.com). The app never sees your Google password. It keeps
+        only a short-lived access token in memory and does not request offline access.
+      </p>
+
+      <h2>Clinic records</h2>
+      <p>
+        Patients, visits, prescriptions, appointments, bills, stock and attachments that you enter are stored in two
+        places only:
+      </p>
+      <ul>
+        <li>in this browser's storage (IndexedDB) on each device you use, and</li>
+        <li>in the private app folder of your own Google Drive, encrypted with your passphrase if you turn that on.</li>
+      </ul>
+      <p>
+        No copy is sent to the app's developer or to anyone else. The developer cannot read, recover or delete your
+        records.
+      </p>
+
+      <h2>How Google user data is used and shared</h2>
+      <ul>
+        <li>Google data is used only to sign you in and to sync the clinic's own records between its devices.</li>
+        <li>It is not sold, shared with or transferred to anyone.</li>
+        <li>It is not used for advertising, profiling or to train AI or machine-learning models.</li>
+        <li>No person other than you (and whoever you share your Google account with) can read it.</li>
+      </ul>
+      <p>
+        Clinic Register's use and transfer of information received from Google APIs adheres to the
+        <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data
+          Policy</a>, including the Limited Use requirements.
+      </p>
+
+      <h2>Other services</h2>
+      <ul>
+        <li>There are no ads, analytics, cookies for tracking or third-party trackers.</li>
+        <li>
+          The app is served as static files by GitHub Pages, which may log basic request information (such as IP
+          addresses) as described in GitHub's privacy statement.
+        </li>
+        <li>
+          Sending a reminder over WhatsApp opens WhatsApp with a prefilled message. Nothing is sent until you press
+          send there.
+        </li>
+      </ul>
+
+      <h2>Keeping and deleting data</h2>
+      <ul>
+        <li>Records stay until you delete them. Clearing this site's data in the browser removes the local copy.</li>
+        <li>
+          To remove the Drive copy, open Google Drive → Settings → Manage apps, find Clinic Register and choose
+          <em>Delete hidden app data</em>.
+        </li>
+        <li>
+          To revoke the app's access to your Google account, use
+          <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>. Signing out of the
+          app also revokes its token.
+        </li>
+      </ul>
+
+      <h2>Changes and contact</h2>
+      <p>
+        Changes to this policy are published on this page and in the app's
+        <a href="https://github.com/danielphingston/clinic-register">source repository</a>. Questions or requests can
+        be raised as an <a href="https://github.com/danielphingston/clinic-register/issues">issue on GitHub</a>.
+      </p>
+
+      <footer>
+        <a href="./">Back to Clinic Register</a>
+        <span aria-hidden="true"> · </span>
+        <a href="terms.html">Terms of use</a>
+        <span aria-hidden="true"> · </span>
+        Not affiliated with Google.
+      </footer>
+    </main>
+  </body>
+</html>

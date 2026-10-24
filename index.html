@@ -15,6 +15,13 @@
   </head>
   <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
+    <!-- For crawlers without JavaScript (Google's OAuth verification checks
+         that the home page links to the privacy policy). -->
+    <noscript>
+      <h1>Clinic Register</h1>
+      <p>An open-source, offline-first outpatient register for a small clinic. JavaScript is needed to run it.</p>
+      <p><a href="%BASE_URL%privacy.html">Privacy policy</a> · <a href="%BASE_URL%terms.html">Terms of use</a></p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
