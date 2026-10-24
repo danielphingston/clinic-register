@@ -230,8 +230,8 @@ export function Settings() {
         <p className="text-sm text-slate-500">Sessions are shaded as working hours on the calendar.</p>
         <ul className="space-y-2">
           {form.sessions.map((s, i) => (
-            <li key={i} className="flex flex-wrap items-end gap-2" aria-label={`Session ${i + 1}`}>
-              <div>
+            <li key={i} className="flex items-end gap-2" aria-label={`Session ${i + 1}`}>
+              <div className="min-w-0 flex-1 sm:flex-none">
                 <label className="label" htmlFor={`session-${i}-start`}>
                   Session {i + 1} from
                 </label>
@@ -243,7 +243,7 @@ export function Settings() {
                   onChange={(e) => setSession(i, 'start', e.target.value)}
                 />
               </div>
-              <div>
+              <div className="min-w-0 flex-1 sm:flex-none">
                 <label className="label" htmlFor={`session-${i}-end`}>
                   to
                 </label>
@@ -257,11 +257,12 @@ export function Settings() {
               </div>
               <button
                 type="button"
-                className="btn-ghost text-red-700"
+                className="btn-ghost shrink-0 px-2 text-red-700"
                 aria-label={`Remove session ${i + 1}`}
+                title="Remove"
                 onClick={() => set('sessions', form.sessions.filter((_, n) => n !== i))}
               >
-                Remove
+                ✕
               </button>
             </li>
           ))}
