@@ -256,6 +256,11 @@ function VisitFormInner() {
                 data-testid="rx-row"
                 className="grid grid-cols-2 gap-2 rounded-md border border-slate-200 p-2 sm:grid-cols-[2fr_0.9fr_0.9fr_0.9fr_0.7fr_2rem] sm:border-0 sm:p-0"
               >
+                {/* On phones the row's remove button sits up here, small and
+                    out of the way, so a thumb scrolling past can't hit it. */}
+                <span className="order-first self-center text-xs font-medium text-slate-500 sm:hidden" aria-hidden="true">
+                  Remedy {i + 1}
+                </span>
                 <RemedyAutocomplete
                   className="col-span-2 sm:col-span-1"
                   label={`Remedy ${i + 1}`}
@@ -297,7 +302,7 @@ function VisitFormInner() {
                 />
                 <button
                   type="button"
-                  className="btn-ghost col-span-2 px-2 text-red-700 sm:col-span-1"
+                  className="btn-ghost order-first gap-1 justify-self-end px-2 py-0.5 text-xs text-red-700 sm:order-none sm:justify-self-auto sm:py-2 sm:text-sm"
                   aria-label={`Remove row ${i + 1}`}
                   title="Remove"
                   onClick={() => setRows((rs) => (rs.length > 1 ? rs.filter((x) => x.key !== r.key) : [blankRow()]))}
