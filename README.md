@@ -1,8 +1,6 @@
 # Clinic Register
 
-Offline-first outpatient register for a homeopathy clinic. It is an installable PWA: data lives in the browser (IndexedDB) and syncs to the clinic's own Google Drive (the hidden app-data folder), optionally encrypted.
-
-See `../opd-register-requirements.md` and `../opd-register-design.md` for scope and design.
+Offline-first outpatient register for a homeopathy clinic. It is an installable PWA: data lives in the browser (IndexedDB) and syncs to the clinic's own Google Drive (the hidden app-data folder), optionally encrypted. Free and open source under the [MIT License](LICENSE).
 
 ## Features
 
@@ -40,7 +38,7 @@ See `../opd-register-requirements.md` and `../opd-register-design.md` for scope 
 3. Set up the **OAuth consent screen** (Google Auth Platform → Branding / Audience / Data access):
    - User type **External** (or Internal on Google Workspace).
    - Scopes: `openid`, `email`, `profile` and `https://www.googleapis.com/auth/drive.appdata`. The app only sees its own hidden app-data folder, never the user's Drive files.
-   - **Testing vs In production.** In *Testing*, only the listed test users (up to 100) can sign in, and Google may ask them to grant consent again after a while. The 7-day refresh-token expiry of testing mode doesn't apply here, because the app uses the browser token flow (short-lived access tokens, no refresh tokens). For a single clinic, Testing with the doctor's and staff's accounts as test users is fine. *In production* lets any Google account sign in; `drive.appdata` is not a sensitive or restricted scope, but Google may still ask you to verify the app's branding (name, logo, privacy policy link) before the consent screen stops showing the "unverified app" notice.
+   - **Testing vs In production.** In *Testing*, only the listed test users (up to 100) can sign in, and Google may ask them to grant consent again after a while. The 7-day refresh-token expiry of testing mode doesn't apply here, because the app uses the browser token flow (short-lived access tokens, no refresh tokens). For a single clinic, Testing with the doctor's and staff's accounts as test users is fine. *In production* lets any Google account sign in, but shows an "unverified app" notice until the branding is verified (next point).
    - **Getting verified (removes the "Google hasn't verified this app" screen).** Only branding verification is needed: none of the scopes are sensitive, so there is no security assessment or demo video. Checklist:
      1. **Branding:** app name `Clinic Register` (must match the home page's heading and must not contain "Google"), a 120×120 PNG logo (`public/icon-192.png` scaled down), a user support email and a developer contact email.
      2. **App domain:** home page `https://<user>.github.io/clinic-register/`, privacy policy `https://<user>.github.io/clinic-register/privacy.html` (`public/privacy.html`, linked from the home page). Terms of service (optional for Google) `https://<user>.github.io/clinic-register/terms.html` (`public/terms.html`).
@@ -136,6 +134,7 @@ scripts/
   make-icons.mjs   PNG icons from public/icon.svg (sharp)
 public/
   icon.svg, icon-192/512.png, icon-maskable-512.png, apple-touch-icon.png, screenshots/
+  privacy.html, terms.html   static privacy policy and terms (linked from the landing page)
   _redirects, _headers   SPA fallback and cache headers for Netlify / Cloudflare Pages
 ```
 
@@ -155,17 +154,15 @@ public/
 - Live queries must be async functions: `useLiveQuery(async () => helper())`. Dexie only keeps dependency tracking across `await`s when the querier itself is `async`; a plain `() => helper()` stops tracking after the helper's first await and the UI silently misses later changes. ESLint enforces this (`no-restricted-syntax`).
 - Counter sales: a bill line with `sale: true` (added with "+ Medicine from stock") takes its `qty` out of stock through a `dispense` move with `refId` = bill id; editing the bill corrects it and voiding returns it (`syncBillSale` in `stockRepo.ts`). Lines copied from a visit's dispensing don't have `sale` set, because the visit already moved the stock.
 
-## Drive sync (phase 7)
+## Drive sync
 
 - Engine: `src/sync/engine.ts` (`SyncEngine` takes a `ClinicDB` and a `DriveClient`, so tests run two "devices" against `FakeDrive`). App glue: `src/sync/service.ts` (`syncService`, `useSyncStatus()`); UI in `src/features/sync/`.
 - Drive layout (appDataFolder): `manifest.json` (tables → file ids, `gen`, encryption info), `data-<table>.json` (a new file per push; the manifest says which is current; superseded copies are swept after 1 h), `blob-<sha256>` (`.g<N>` suffix after an encryption change), `lock.json`.
 - Local change tracking: Dexie hooks on every synced table (and the `settings` kv entry) bump counters in localStorage. Sync's own writes run in transactions tagged `SYNC_APPLY` and are not counted. Writes that bypass Dexie (none today) would not be synced.
 - Only kv `settings` syncs; counters (`seq:*`), `sync:*` state, the cached key and `sync:owner` stay per device. After a pull the counters are raised to the highest number in the data; duplicate OP/bill numbers are renumbered (newer record) with a visible notice.
-- Testing against the mock Drive:
-  ```bash
-  node scripts/mock-drive.mjs --port 4180 --dir /tmp/mock-drive &
-  VITE_DRIVE_API_BASE=http://localhost:4180/drive/v3 \
-  VITE_DRIVE_UPLOAD_BASE=http://localhost:4180/upload/drive/v3 npm run build
-  ```
-  **Auth bypass gate:** when `VITE_DRIVE_API_BASE` is a `localhost`/`127.0.0.1` URL (`isMockDrive()` in `src/sync/drive.ts`), `getToken()` returns a dummy token. It cannot trigger against googleapis.com; never set these variables in a real deployment build.
+- **Mock Drive auth bypass** (see Development for how to run it): when `VITE_DRIVE_API_BASE` is a `localhost`/`127.0.0.1` URL (`isMockDrive()` in `src/sync/drive.ts`), `getToken()` returns a dummy token. It cannot trigger against googleapis.com; never set these variables in a real deployment build.
 - In Vitest the default Drive factory is off (`MODE === 'test'`); tests install a fake with `syncService.setDriveFactory(...)`.
+
+## License
+
+[MIT](LICENSE) © 2026 Daniel Phingston
