@@ -120,8 +120,6 @@ export function SignIn() {
           <a className="text-brand-700 underline" href={SOURCE_URL}>
             Source code on GitHub
           </a>
-          <span aria-hidden="true"> · </span>
-          Not affiliated with Google.
         </footer>
       </main>
     </div>
