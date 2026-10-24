@@ -3,6 +3,9 @@ import { useAuth } from '../auth/useAuth'
 import { isConfigured } from '../auth/google'
 
 const SOURCE_URL = 'https://github.com/danielphingston/clinic-register'
+// Static page in public/ (Google's OAuth verification needs a privacy policy
+// on the same site, linked from the home page).
+const PRIVACY_URL = `${import.meta.env.BASE_URL}privacy.html`
 
 const FEATURES = [
   ['Patients and visits', 'OP numbers, case notes, prescriptions and follow-ups.'],
@@ -105,6 +108,10 @@ export function SignIn() {
         </section>
 
         <footer className="mt-10 border-t border-slate-200 pt-4 text-sm text-slate-500">
+          <a className="text-brand-700 underline" href={PRIVACY_URL}>
+            Privacy policy
+          </a>
+          <span aria-hidden="true"> · </span>
           <a className="text-brand-700 underline" href={SOURCE_URL}>
             Source code on GitHub
           </a>

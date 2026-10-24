@@ -48,6 +48,7 @@ describe('sign-in screen', () => {
       'href',
       'https://github.com/danielphingston/clinic-register',
     )
+    expect(screen.getByRole('link', { name: 'Privacy policy' })).toHaveAttribute('href', '/privacy.html')
   })
 
   it('shows setup instructions when no client ID is configured', () => {
