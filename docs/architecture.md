@@ -62,3 +62,4 @@ It is type-checked against the WebWorker lib by `tsconfig.sw.json`. Keep anythin
 
 - **Live queries must be async functions**: write `useLiveQuery(async () => helper())`. Dexie keeps dependency tracking across `await`s only when the query function itself is `async`; with a plain `() => helper()`, tracking stops after the helper's first `await` and the UI silently misses later changes. ESLint enforces this (`no-restricted-syntax`).
 - Sign-in is required once. After that the app opens offline; a Google token is needed only for Drive sync.
+- Google sign-in uses the GIS popup, requested synchronously inside the click (the script is preloaded at startup). Safari, iOS/iPadOS, home-screen apps, blocked popups and an unloaded script use a full-page OAuth redirect instead; `finishRedirectSignIn()` (run first via `src/auth/redirectBoot.ts`, before the router is created) reads the token back from the URL fragment. Both need the app URL listed as an authorised redirect URI.

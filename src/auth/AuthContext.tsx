@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { fetchProfile, preloadGoogle, requestToken, revokeToken, type AccessToken, type GoogleProfile } from './google'
+import { fetchProfile, finishRedirectSignIn, preloadGoogle, requestToken, revokeToken, type AccessToken, type GoogleProfile } from './google'
 import { isMockDrive } from '../sync/drive'
 import { AuthContext, ReauthRequiredError } from './authState'
 
@@ -55,24 +55,54 @@ function loadProfile(): GoogleProfile | null {
   }
 }
 
+// Never resolves: used after sending the page to Google (redirect sign-in), so
+// callers don't carry on (sync, clear their busy state) while it navigates away.
+const navigatingAway = () => new Promise<never>(() => {})
+
 export function AuthProvider({ children }: { children: ReactNode }) {
+  // Returning from Google's redirect sign-in: a token, an error message or null.
+  // Read first, so the token is saved before anything loads it.
+  const [redirect] = useState(finishRedirectSignIn)
   const [profile, setProfile] = useState<GoogleProfile | null>(loadProfile)
-  const [storedToken] = useState(() => loadToken(profile))
+  const [authError, setAuthError] = useState<string | null>(typeof redirect === 'string' ? redirect : null)
+  const [storedToken] = useState(() => {
+    if (redirect && typeof redirect !== 'string' && profile) saveToken(redirect, profile.sub)
+    return loadToken(profile) ?? (redirect && typeof redirect !== 'string' ? redirect : null)
+  })
   const tokenRef = useRef<AccessToken | null>(storedToken)
+  const finishedRedirect = useRef(false)
 
   // Load the GIS script up front so sign-in clicks can open the popup synchronously.
   useEffect(() => {
     preloadGoogle().catch(() => {})
   }, [])
 
-  const signIn = useCallback(async () => {
-    const token = await requestToken({ prompt: 'select_account' })
-    const p = await fetchProfile(token.token)
+  const adopt = useCallback((token: AccessToken, p: GoogleProfile) => {
     tokenRef.current = token
     saveToken(token, p.sub)
     localStorage.setItem(PROFILE_KEY, JSON.stringify(p))
     setProfile(p)
   }, [])
+
+  // First sign-in by redirect: there is no profile yet, so fetch it now.
+  useEffect(() => {
+    if (!redirect || typeof redirect === 'string' || profile || finishedRedirect.current) return
+    finishedRedirect.current = true
+    fetchProfile(redirect.token).then(
+      (p) => adopt(redirect, p),
+      (e) => {
+        tokenRef.current = null
+        setAuthError(e instanceof Error ? e.message : String(e))
+      },
+    )
+  }, [redirect, profile, adopt])
+
+  const signIn = useCallback(async () => {
+    // First sign-in: the account chooser. requestToken must be called with no await before it.
+    const token = await requestToken({ prompt: 'select_account' })
+    if (!token) return navigatingAway()
+    adopt(token, await fetchProfile(token.token))
+  }, [adopt])
 
   const signOut = useCallback(async () => {
     if (tokenRef.current) await revokeToken(tokenRef.current.token).catch(() => {})
@@ -99,15 +129,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const reauthorize = useCallback(async () => {
     if (isMockDrive()) return
-    // Call requestToken first, synchronously within the click.
+    // Call requestToken first, synchronously within the click. With the email
+    // known it reconnects quietly: the popup closes by itself.
     const fresh = await requestToken({ prompt: '', hint: profile?.email })
+    if (!fresh) return navigatingAway()
     tokenRef.current = fresh
     if (profile) saveToken(fresh, profile.sub)
   }, [profile])
 
   const value = useMemo(
-    () => ({ profile, signIn, signOut, getToken, reauthorize }),
-    [profile, signIn, signOut, getToken, reauthorize],
+    () => ({ profile, authError, signIn, signOut, getToken, reauthorize }),
+    [profile, authError, signIn, signOut, getToken, reauthorize],
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

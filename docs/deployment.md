@@ -11,7 +11,7 @@ Clinic Register is a static site. You build it once and serve it from any static
    - Scopes: `openid`, `email`, `profile` and `https://www.googleapis.com/auth/drive.appdata`.
 4. Under **Credentials → Create credentials → OAuth client ID**, choose **Web application**:
    - **Authorised JavaScript origins**: add your production origin (for example `https://clinic.example.com`). For development, also add `http://localhost:5173` and `http://localhost:4173`. Origins must match exactly: scheme, host and port, with no path or trailing slash.
-   - Leave **redirect URIs** empty. The app uses the Google Identity Services token popup.
+   - **Authorised redirect URIs**: add the app URL exactly, including the trailing slash and any base path (for example `https://<user>.github.io/clinic-register/`, or `http://localhost:5173/` for development). Safari, iPhone/iPad and installed home-screen apps can't use Google's sign-in popup, so there (and when a popup is blocked) the app signs in by redirecting to Google and back to this URL.
 5. Set the client ID as `VITE_GOOGLE_CLIENT_ID`.
 
 ### Testing vs. production publishing
