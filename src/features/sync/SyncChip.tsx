@@ -51,8 +51,8 @@ export function SyncChip() {
 }
 
 function SyncPanel({ status, now, onClose }: { status: SyncStatus; now: number; onClose: () => void }) {
-  const { reauthorize } = useAuth()
-  const [authError, setAuthError] = useState('')
+  const { reauthorize, authError: redirectError } = useAuth()
+  const [authError, setAuthError] = useState(redirectError ?? '')
   const canSync = status.phase !== 'disabled' && status.phase !== 'syncing' && status.phase !== 'needs-passphrase'
 
   return (

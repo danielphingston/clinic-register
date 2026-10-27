@@ -1,4 +1,4 @@
-import { act, render } from '@testing-library/react'
+import { act, render, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthProvider } from './AuthContext'
 import { useAuth } from './useAuth'
@@ -10,6 +10,7 @@ vi.mock('./google', () => ({
   preloadGoogle: vi.fn().mockResolvedValue(undefined),
   fetchProfile: vi.fn(),
   revokeToken: vi.fn(),
+  finishRedirectSignIn: vi.fn(),
 }))
 
 const PROFILE = { sub: '1', email: 'doc@example.com', name: 'Doc' }
@@ -34,6 +35,7 @@ beforeEach(() => {
   vi.mocked(google.preloadGoogle).mockReset().mockResolvedValue()
   vi.mocked(google.fetchProfile).mockReset().mockResolvedValue(PROFILE)
   vi.mocked(google.revokeToken).mockReset().mockResolvedValue()
+  vi.mocked(google.finishRedirectSignIn).mockReset().mockReturnValue(null)
 })
 
 describe('getToken', () => {
@@ -118,6 +120,50 @@ describe('signOut', () => {
   it('ignores a corrupt saved profile', () => {
     localStorage.setItem('auth:profile', '{not json')
     const auth = setup()
+    expect(auth().profile).toBeNull()
+  })
+})
+
+describe('redirect sign-in', () => {
+  it('does not carry on when requestToken sends the page to Google', async () => {
+    vi.mocked(google.requestToken).mockResolvedValue(null)
+    const auth = setup()
+    let settled = false
+    await act(async () => {
+      void auth().signIn().then(() => (settled = true))
+    })
+
+    expect(google.requestToken).toHaveBeenCalledWith({ prompt: 'select_account' })
+    expect(google.fetchProfile).not.toHaveBeenCalled()
+    expect(settled).toBe(false)
+    expect(auth().profile).toBeNull()
+  })
+
+  it('completes a first sign-in from the redirect: fetches the profile and saves both', async () => {
+    vi.mocked(google.finishRedirectSignIn).mockReturnValue({ token: 'r', expiresAt: Date.now() + 60_000 })
+    const auth = setup()
+
+    await waitFor(() => expect(auth().profile).toEqual(PROFILE))
+    expect(google.fetchProfile).toHaveBeenCalledWith('r')
+    expect(JSON.parse(localStorage.getItem('auth:profile')!)).toEqual(PROFILE)
+    expect(JSON.parse(localStorage.getItem('auth:token')!)).toMatchObject({ token: 'r', sub: '1' })
+    expect(await auth().getToken()).toBe('r')
+  })
+
+  it('saves the redirect token for an existing profile without refetching it', async () => {
+    localStorage.setItem('auth:profile', JSON.stringify(PROFILE))
+    vi.mocked(google.finishRedirectSignIn).mockReturnValue({ token: 'r2', expiresAt: Date.now() + 60_000 })
+    const auth = setup()
+
+    expect(await auth().getToken()).toBe('r2')
+    expect(google.fetchProfile).not.toHaveBeenCalled()
+    expect(JSON.parse(localStorage.getItem('auth:token')!)).toMatchObject({ token: 'r2', sub: '1' })
+  })
+
+  it('exposes the error from a failed or cancelled redirect', () => {
+    vi.mocked(google.finishRedirectSignIn).mockReturnValue('Google sign-in was cancelled')
+    const auth = setup()
+    expect(auth().authError).toBe('Google sign-in was cancelled')
     expect(auth().profile).toBeNull()
   })
 })

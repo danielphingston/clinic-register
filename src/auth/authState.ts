@@ -3,10 +3,13 @@ import type { GoogleProfile } from './google'
 
 export interface AuthState {
   profile: GoogleProfile | null
+  // Why the redirect sign-in we just came back from failed (or was cancelled).
+  authError: string | null
   signIn(): Promise<void>
   signOut(): Promise<void>
   // Returns a valid access token, or throws ReauthRequiredError (never opens a
-  // popup); then call reauthorize() from a click.
+  // popup); then call reauthorize() from a click. signIn() and reauthorize()
+  // never resolve when they send the page to Google (redirect sign-in).
   getToken(opts?: { forceRefresh?: boolean }): Promise<string>
   reauthorize(): Promise<void>
 }

@@ -53,8 +53,8 @@ function LockBanner() {
 
 function AuthBanner() {
   const { phase } = useSyncStatus()
-  const { reauthorize } = useAuth()
-  const [error, setError] = useState('')
+  const { reauthorize, authError } = useAuth()
+  const [error, setError] = useState(authError ?? '')
   if (phase !== 'needs-auth') return null
   return (
     <div role="status" className="flex flex-wrap items-center gap-2 rounded-md bg-red-50 p-3 text-sm text-red-800">

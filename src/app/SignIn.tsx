@@ -19,9 +19,9 @@ const FEATURES = [
 // what the app is, where the data goes and where the code lives before
 // offering sign-in, rather than being a bare login prompt.
 export function SignIn() {
-  const { signIn } = useAuth()
+  const { signIn, authError } = useAuth()
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(authError)
   const configured = isConfigured()
 
   async function handleSignIn() {

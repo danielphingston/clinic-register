@@ -60,7 +60,7 @@ function FullPage({ children }: { children: ReactNode }) {
 type RestoreState = 'checking' | 'restoring' | 'passphrase' | 'auth' | 'error'
 
 export function RestoreScreen({ onDone }: { onDone: () => void }) {
-  const { reauthorize } = useAuth()
+  const { reauthorize, authError } = useAuth()
   const status = useSyncStatus()
   const [state, setState] = useState<RestoreState>('checking')
   const [error, setError] = useState('')
@@ -129,6 +129,7 @@ export function RestoreScreen({ onDone }: { onDone: () => void }) {
             <button className="btn-primary mt-3" onClick={() => reauthorize().then(run, (e) => setError(String(e?.message ?? e)))}>
               Sign in again to sync
             </button>
+            {authError && <p className="mt-2 text-sm text-red-700">{authError}</p>}
           </>
         )}
         {state === 'error' && (
