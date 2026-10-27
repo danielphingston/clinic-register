@@ -1,7 +1,8 @@
+import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
-import { bucketLabel } from '../../lib/dateRange'
-import { formatDate, formatINR } from '../../lib/format'
-import type { DailyTrend } from '../reports/reportQueries'
+import { bucketLabel, monthRange } from '../../lib/dateRange'
+import { formatDate, formatINR, parseISODate, todayISO } from '../../lib/format'
+import { dailyTrend, type DailyTrend } from '../reports/reportQueries'
 
 // Lightweight inline-SVG bars, so the dashboard doesn't pull in Recharts.
 // Two small charts share one hover/focus position instead of a dual axis.
@@ -9,6 +10,21 @@ import type { DailyTrend } from '../reports/reportQueries'
 const W = 600
 const H = 90
 const GAP = 2
+const MONTH_CHOICES = 24
+
+// "YYYY-MM" keys, newest first, starting with the month of `today`.
+function recentMonths(today: string): string[] {
+  const t = parseISODate(today)
+  return Array.from({ length: MONTH_CHOICES }, (_, i) => {
+    const d = new Date(t.getFullYear(), t.getMonth() - i, 1)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })
+}
+
+// 2026-10 -> "October 2026"
+function monthLabel(ym: string): string {
+  return parseISODate(`${ym}-01`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+}
 
 function Bars({
   data,
@@ -62,8 +78,54 @@ function Bars({
   )
 }
 
-export function TrendChart({ data }: { data: DailyTrend[] }) {
+// `last30` is the dashboard's last-30-days series; a chosen month is fetched here.
+export function TrendChart({ data: last30 }: { data: DailyTrend[] }) {
   const [active, setActive] = useState<number | null>(null)
+  const [month, setMonth] = useState<string | null>(null) // "YYYY-MM", null = last 30 days
+  const months = recentMonths(todayISO())
+  const monthData = useLiveQuery(async () => (month ? dailyTrend(monthRange(month)) : undefined), [month])
+  const data = month ? monthData : last30
+  const title = month ? monthLabel(month) : 'Last 30 days'
+  const idx = month ? months.indexOf(month) : -1
+
+  const choose = (m: string | null) => {
+    setMonth(m)
+    setActive(null)
+  }
+  const prev = month ? months[idx + 1] : months[1] // from last 30 days: last month
+  const next = month ? months[idx - 1] : undefined
+
+  const header = (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <h2 id="trend-heading" className="font-semibold">
+        {title}
+      </h2>
+      <div className="flex items-center gap-1">
+        <button type="button" className="btn-ghost border border-slate-300 px-2 py-1" aria-label="Previous month" disabled={!prev} onClick={() => prev && choose(prev)}>
+          ‹
+        </button>
+        <select className="input w-auto py-1 text-sm" aria-label="Period" value={month ?? ''} onChange={(e) => choose(e.target.value || null)}>
+          <option value="">Last 30 days</option>
+          {months.map((m) => (
+            <option key={m} value={m}>
+              {monthLabel(m)}
+            </option>
+          ))}
+        </select>
+        <button type="button" className="btn-ghost border border-slate-300 px-2 py-1" aria-label="Next month" disabled={!next} onClick={() => next && choose(next)}>
+          ›
+        </button>
+      </div>
+    </div>
+  )
+
+  if (!data) {
+    return (
+      <section className="card" aria-labelledby="trend-heading" data-testid="trend-chart">
+        {header}
+      </section>
+    )
+  }
   if (!data.length) return null
   const totalVisits = data.reduce((s, d) => s + d.visits, 0)
   const totalCollected = Math.round(data.reduce((s, d) => s + d.collected, 0) * 100) / 100
@@ -73,10 +135,8 @@ export function TrendChart({ data }: { data: DailyTrend[] }) {
 
   return (
     <section className="card" aria-labelledby="trend-heading" data-testid="trend-chart">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="trend-heading" className="font-semibold">
-          Last 30 days
-        </h2>
+      {header}
+      <div className="mt-1 flex flex-wrap items-baseline justify-end gap-2">
         <p className="text-sm text-slate-600" aria-live="polite">
           {cur ? (
             <>
@@ -84,7 +144,7 @@ export function TrendChart({ data }: { data: DailyTrend[] }) {
             </>
           ) : (
             <>
-              {totalVisits} visits · {formatINR(totalCollected)} collected
+              {totalVisits} visit{totalVisits === 1 ? '' : 's'} · {formatINR(totalCollected)} collected
             </>
           )}
         </p>
