@@ -73,20 +73,36 @@ export function isConfigured(): boolean {
   return Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID)
 }
 
-// Opens the Google popup (or silently refreshes when `prompt` is '' and the
-// user has already consented). Must be called from a user gesture the first time.
-export async function requestToken(opts: { prompt?: '' | 'consent' | 'select_account'; hint?: string } = {}): Promise<AccessToken> {
-  await loadScript()
+// An ignored or lost popup would otherwise leave the promise pending forever.
+const POPUP_TIMEOUT_MS = 2 * 60 * 1000
+
+const GIS_ERRORS: Record<string, string> = {
+  popup_failed_to_open: 'Your browser blocked the Google sign-in pop-up. Allow pop-ups for this site and try again.',
+  popup_closed: 'Sign-in was cancelled.',
+}
+
+// Starts loading the GIS script early so later clicks can open the popup
+// synchronously. Safe to ignore failures (e.g. offline).
+export function preloadGoogle(): Promise<void> {
+  return loadScript()
+}
+
+function requestTokenNow(opts: { prompt?: '' | 'consent' | 'select_account'; hint?: string }): Promise<AccessToken> {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
-  if (!clientId) throw new Error('VITE_GOOGLE_CLIENT_ID is not set.')
+  if (!clientId) return Promise.reject(new Error('VITE_GOOGLE_CLIENT_ID is not set.'))
 
   return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Sign-in timed out. Please try again.')), POPUP_TIMEOUT_MS)
+    const settle = <T,>(fn: (v: T) => void) => (v: T) => {
+      clearTimeout(timer)
+      fn(v)
+    }
     const client = window.google!.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: SCOPES,
-      callback: (resp) => {
+      callback: settle((resp: TokenResponse) => {
         if (resp.error || !resp.access_token) {
-          reject(new Error(resp.error_description || resp.error || 'Sign-in failed'))
+          reject(new Error(GIS_ERRORS[resp.error ?? ''] || resp.error_description || resp.error || 'Sign-in failed'))
           return
         }
         resolve({
@@ -94,11 +110,22 @@ export async function requestToken(opts: { prompt?: '' | 'consent' | 'select_acc
           // Refresh a minute early to avoid using a token mid-expiry.
           expiresAt: Date.now() + ((resp.expires_in ?? 3600) - 60) * 1000,
         })
-      },
-      error_callback: (err) => reject(new Error(err.message || `Sign-in ${err.type}`)),
+      }),
+      error_callback: settle((err: { type: string; message?: string }) =>
+        reject(new Error(GIS_ERRORS[err.type] || err.message || `Sign-in ${err.type}`)),
+      ),
     })
     client.requestAccessToken({ prompt: opts.prompt ?? '', login_hint: opts.hint })
   })
+}
+
+// Opens the Google popup (or silently refreshes when `prompt` is '' and the
+// user has already consented). Only call from a user gesture. When GIS is
+// already loaded this requests the token synchronously, keeping the click's
+// user activation; awaiting the script first would get the popup blocked.
+export function requestToken(opts: { prompt?: '' | 'consent' | 'select_account'; hint?: string } = {}): Promise<AccessToken> {
+  if (window.google?.accounts) return requestTokenNow(opts)
+  return loadScript().then(() => requestTokenNow(opts))
 }
 
 export async function fetchProfile(token: string): Promise<GoogleProfile> {
