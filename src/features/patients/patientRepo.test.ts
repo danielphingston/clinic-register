@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { db } from '../../db/db'
-import { createPatient, deletePatient, normalizeIndianMobile, opNoHolder, searchPatients, updatePatient } from './patientRepo'
+import {
+  createPatient,
+  deletePatient,
+  knownDiagnoses,
+  normalizeIndianMobile,
+  opNoHolder,
+  searchPatients,
+  setDiagnoses,
+  updatePatient,
+} from './patientRepo'
 
 const year = new Date().getFullYear()
 
@@ -77,5 +86,38 @@ describe('patients', () => {
     await deletePatient(a.id)
     expect((await opNoHolder('REG-77'))?.id).toBe(a.id)
     expect(await opNoHolder('REG-77', a.id)).toBeUndefined()
+  })
+})
+
+describe('diagnoses', () => {
+  it('trims, dedupes case-insensitively and ignores blanks', async () => {
+    const p = await createPatient({ name: 'Asha', diagnoses: [' Migraine ', 'migraine', '', 'PCOS'] })
+    expect(p.diagnoses).toEqual(['Migraine', 'PCOS'])
+    await setDiagnoses(p.id, [...(p.diagnoses ?? []), 'pcos', '  Asthma  '])
+    expect((await db.patients.get(p.id))?.diagnoses).toEqual(['Migraine', 'PCOS', 'Asthma'])
+  })
+
+  it('leaves old records without the field working, and survives a profile edit', async () => {
+    const old = await createPatient({ name: 'Ravi' })
+    expect(old.diagnoses).toBeUndefined()
+    await setDiagnoses(old.id, ['Gout'])
+    await updatePatient(old.id, { name: 'Ravi K' })
+    expect((await db.patients.get(old.id))?.diagnoses).toEqual(['Gout'])
+    await setDiagnoses(old.id, [])
+    expect((await db.patients.get(old.id))?.diagnoses).toBeUndefined()
+  })
+
+  it('bumps updatedAt so the change syncs', async () => {
+    const p = await createPatient({ name: 'Bala' })
+    await new Promise((r) => setTimeout(r, 2))
+    await setDiagnoses(p.id, ['Eczema'])
+    expect((await db.patients.get(p.id))!.updatedAt).toBeGreaterThan(p.updatedAt)
+  })
+
+  it('lists known diagnoses from live patients only', async () => {
+    await createPatient({ name: 'A', diagnoses: ['Gout', 'Asthma'] })
+    const b = await createPatient({ name: 'B', diagnoses: ['gout', 'Zoster'] })
+    await deletePatient(b.id)
+    expect(await knownDiagnoses()).toEqual(['Asthma', 'Gout'])
   })
 })

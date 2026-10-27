@@ -10,7 +10,9 @@ import { byRxOrder, visitsForPatient } from '../visits/visitRepo'
 import { PatientAppointments } from '../appointments/PatientAppointments'
 import { PatientDues } from '../billing/PatientDues'
 import { PatientAttachments } from '../attachments/PatientAttachments'
+import { PatientDiagnoses } from './PatientDiagnoses'
 import { PatientCertificates } from '../certificates/PatientCertificates'
+import { WhatsAppTemplateButton } from './WhatsAppTemplateButton'
 
 export function PatientProfile() {
   const { id = '' } = useParams()
@@ -69,6 +71,7 @@ export function PatientProfile() {
             <Link to={`/print/op-slip/${patient.id}`} className="btn-ghost border border-slate-300">
               Print OP slip
             </Link>
+            <WhatsAppTemplateButton patient={patient} />
           </div>
         </div>
       </div>
@@ -122,6 +125,7 @@ export function PatientProfile() {
         </section>
 
         <aside aria-label="Appointments, billing, certificates and attachments" className="space-y-4">
+          <PatientDiagnoses patient={patient} />
           <PatientAppointments patient={patient} />
           <PatientDues patient={patient} newBillVisitId={billVisit} onNewBillClosed={() => setParams({}, { replace: true })} />
           <PatientCertificates patient={patient} />

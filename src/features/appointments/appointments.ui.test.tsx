@@ -167,7 +167,7 @@ describe('calendar and print', () => {
 
   it('saves clinic sessions in settings', async () => {
     const user = userEvent.setup()
-    open('/settings')
+    open('/settings?tab=hours')
     const end = await screen.findByLabelText('to', { selector: '#session-0-end' })
     fireEvent.change(end, { target: { value: '08:00' } })
     await user.click(screen.getByRole('button', { name: 'Save' }))

@@ -37,6 +37,21 @@ async function autoOpNo(): Promise<string> {
   }
 }
 
+// Trims, drops blanks and removes case-insensitive duplicates (first spelling wins).
+export function normalizeDiagnoses(list: readonly string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of list) {
+    const d = raw.trim().replace(/\s+/g, ' ')
+    const key = d.toLowerCase()
+    if (d && !seen.has(key)) {
+      seen.add(key)
+      out.push(d)
+    }
+  }
+  return out
+}
+
 function clean(input: PatientInput): Omit<PatientInput, 'opNo'> {
   const out: Omit<PatientInput, 'opNo'> = { name: input.name.trim() }
   if (input.dob) out.dob = input.dob
@@ -49,6 +64,8 @@ function clean(input: PatientInput): Omit<PatientInput, 'opNo'> {
     const v = input[k]?.trim()
     if (v) out[k] = v
   }
+  const diagnoses = input.diagnoses && normalizeDiagnoses(input.diagnoses)
+  if (diagnoses?.length) out.diagnoses = diagnoses
   return out
 }
 
@@ -79,6 +96,18 @@ export async function updatePatient(id: string, input: PatientInput): Promise<vo
     notes: undefined,
     ...c,
   })
+}
+
+// Replaces the patient's diagnoses; an empty list removes the field.
+export async function setDiagnoses(id: string, diagnoses: string[]): Promise<void> {
+  const list = normalizeDiagnoses(diagnoses)
+  await update<Patient>(db.patients, id, { diagnoses: list.length ? list : undefined })
+}
+
+// Every diagnosis used on a live patient, de-duplicated and sorted, for suggestions.
+export async function knownDiagnoses(): Promise<string[]> {
+  const rows = await db.patients.where('deleted').equals(0).toArray()
+  return normalizeDiagnoses(rows.flatMap((p) => p.diagnoses ?? [])).sort((a, b) => a.localeCompare(b))
 }
 
 export function deletePatient(id: string): Promise<void> {

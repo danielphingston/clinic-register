@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dueReminderLink, fillDueTemplate, whatsappNumber } from './whatsapp'
+import { dueReminderLink, fillDueTemplate, fillTemplate, templateLink, whatsappNumber } from './whatsapp'
 
 const patient = { name: 'Asha Menon', opNo: 'OP-2026-00007', phone: '98765 43210' }
 const settings = { clinicName: 'Sunrise Homeo & Care', whatsappDueTemplate: 'Dear {name}, ₹{balance} due by {dueDate} at {clinic} ({opNo}).' }
@@ -32,5 +32,24 @@ describe('whatsapp reminders', () => {
   it('returns null without a valid phone', () => {
     expect(dueReminderLink({ ...patient, phone: undefined }, 100, settings)).toBeNull()
     expect(dueReminderLink({ ...patient, phone: '555' }, 100, settings)).toBeNull()
+  })
+})
+
+describe('custom whatsapp templates', () => {
+  const full = { clinicName: 'Sunrise Homeo & Care', doctorName: 'Dr Rao', phone: '0471 222 333' }
+
+  it('fills placeholders and leaves unknown ones alone', () => {
+    expect(fillTemplate('Hi {name} ({opNo}) from {clinic}, {doctor}, {phone} {x}', patient, full)).toBe(
+      'Hi Asha Menon (OP-2026-00007) from Sunrise Homeo & Care, Dr Rao, 0471 222 333 {x}',
+    )
+    expect(fillTemplate('Today is {date}', patient, full, '2026-11-05')).toBe('Today is 05 Nov 2026')
+    expect(fillTemplate('{clinic}|{doctor}', patient, { clinicName: '' })).toBe('our clinic|')
+  })
+
+  it('builds an encoded link, or null without a valid mobile', () => {
+    const url = templateLink(patient, 'Good morning {name}! — {clinic}', full)!
+    expect(url.startsWith('https://wa.me/919876543210?text=')).toBe(true)
+    expect(new URL(url).searchParams.get('text')).toBe('Good morning Asha Menon! — Sunrise Homeo & Care')
+    expect(templateLink({ ...patient, phone: '555' }, 'Hi', full)).toBeNull()
   })
 })

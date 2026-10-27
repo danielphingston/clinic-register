@@ -183,7 +183,7 @@ describe('attachments UI', () => {
     const p = await createPatient({ name: 'Asha' })
     await addAttachment({ patientId: p.id, kind: 'lab', file: bigJpg('a.jpg', 1) })
     await addAttachment({ patientId: p.id, kind: 'lab', file: bigJpg('a.jpg', 1) })
-    open('/settings')
+    open('/settings?tab=data')
     const card = await screen.findByTestId('storage-card')
     await waitFor(() => expect(within(card).getByTestId('storage-attachments')).toHaveTextContent('2 files · 310 KB (from 8.4 MB before compression)'))
     expect(within(card).getByTestId('storage-browser')).toBeInTheDocument()

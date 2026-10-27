@@ -180,7 +180,7 @@ describe('sync UI', () => {
   it('turns on encryption from Settings with validation and the warning', async () => {
     await db.patients.add(newRecord<Patient>({ opNo: `OP-${YEAR}-00001`, name: 'Plain Name' }))
     const user = userEvent.setup()
-    open('/settings')
+    open('/settings?tab=data')
     const section = await screen.findByTestId('encryption-section')
     expect(await within(section).findByText('not encrypted')).toBeInTheDocument()
     await user.click(within(section).getByRole('button', { name: 'Turn on encryption' }))

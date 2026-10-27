@@ -72,6 +72,14 @@ export const DEFAULT_SETTINGS: ClinicSettings = {
   opPrefix: 'OP',
   whatsappDueTemplate:
     'Dear {name}, a balance of {balance} is pending at {clinic} ({opNo}, due {dueDate}). Kindly clear it on your next visit. Thank you.',
+  whatsappTemplates: [
+    { id: 'tpl-good-morning', name: 'Good morning', body: 'Good morning {name}! Wishing you a healthy day. — {clinic}' },
+    {
+      id: 'tpl-follow-up',
+      name: 'Follow-up reminder',
+      body: 'Dear {name}, this is a gentle reminder for your follow-up at {clinic}. Please call {phone} to book a time. — {doctor}',
+    },
+  ],
   consultationFee: 0,
   defaultDueDays: 30,
   encryptDrive: false,

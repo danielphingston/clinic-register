@@ -19,6 +19,7 @@ export interface Patient extends BaseRecord {
   phone?: string
   address?: string
   notes?: string
+  diagnoses?: string[] // absent on records created before the field existed
 }
 
 export interface CaseNotes {
@@ -200,6 +201,13 @@ export interface ClinicSession {
   end: string
 }
 
+// A reusable WhatsApp message (greeting, follow-up, festival wish) with {placeholders}.
+export interface WhatsAppTemplate {
+  id: string
+  name: string
+  body: string
+}
+
 export interface ClinicSettings {
   clinicName: string
   doctorName: string
@@ -210,6 +218,8 @@ export interface ClinicSettings {
   email: string
   opPrefix: string
   whatsappDueTemplate: string
+  // Absent on data saved before templates existed; getSettings fills the defaults.
+  whatsappTemplates?: WhatsAppTemplate[]
   consultationFee: number
   defaultDueDays: number
   encryptDrive: boolean

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
 import { getSettings, saveSettings } from '../../db/repo'
 import type { CandidateLine, CertificateKind, CertTypeSettings, ClinicSettings, LetterheadStyle } from '../../db/types'
@@ -12,6 +12,9 @@ import { ExportAllCard } from '../reports/ExportAllCard'
 import { NumberInput } from '../../app/NumberInput'
 import { KIND_LABEL, PLACEHOLDERS } from '../certificates/certificateRepo'
 import { BrandingSettings } from './BrandingSettings'
+import { WhatsAppTemplatesEditor } from './WhatsAppTemplatesEditor'
+import { PlaceholderTextarea } from './PlaceholderTextarea'
+import { DUE_TOKENS } from '../../lib/whatsapp'
 
 const FIELDS: { key: keyof ClinicSettings; label: string; multiline?: boolean }[] = [
   { key: 'clinicName', label: 'Clinic name' },
@@ -23,6 +26,25 @@ const FIELDS: { key: keyof ClinicSettings; label: string; multiline?: boolean }[
   { key: 'address', label: 'Address', multiline: true },
   { key: 'opPrefix', label: 'OP number prefix' },
 ]
+
+// Sections shown one at a time; the active one lives in ?tab= so it survives reloads.
+const TABS = [
+  { id: 'clinic', label: 'Clinic' },
+  { id: 'hours', label: 'Hours' },
+  { id: 'billing', label: 'Billing' },
+  { id: 'certificates', label: 'Certificates' },
+  { id: 'whatsapp', label: 'WhatsApp' },
+  { id: 'branding', label: 'Branding' },
+  { id: 'remedies', label: 'Remedies' },
+  { id: 'notifications', label: 'Notifications' },
+  { id: 'data', label: 'Sync & storage' },
+  { id: 'account', label: 'Account' },
+] as const
+
+type TabId = (typeof TABS)[number]['id']
+
+// Sections edited through the one settings form (and its single Save button).
+const FORM_TABS: TabId[] = ['clinic', 'hours', 'billing', 'certificates', 'whatsapp']
 
 const LETTERHEAD_LABEL: Record<LetterheadStyle, string> = {
   classic: 'Classic: logo and name left, address right',
@@ -125,6 +147,9 @@ function CertTypeFields({ kind, value, onChange }: { kind: CertificateKind; valu
 export function Settings() {
   const { profile, signOut } = useAuth()
   const navigate = useNavigate()
+  const [params, setParams] = useSearchParams()
+  const requested = params.get('tab')
+  const tab: TabId = TABS.find((t) => t.id === requested)?.id ?? 'clinic'
   const [form, setForm] = useState<ClinicSettings | null>(null)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
@@ -145,19 +170,30 @@ export function Settings() {
     set('sessions', form.sessions.map((s, n) => (n === i ? { ...s, [field]: value } : s)))
   }
 
+  function showTab(id: TabId) {
+    setParams({ tab: id }, { replace: true })
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!form) return
+    // Fail on the first problem in any section and jump to that section.
+    const fail = (id: TabId, message: string) => {
+      showTab(id)
+      setError(message)
+    }
     const sessionError = validateSessions(form.sessions)
-    if (sessionError) return setError(sessionError)
-    if (!(form.slotMinutes >= 5 && form.slotMinutes <= 120)) return setError('Slot length must be 5–120 minutes')
-    if (!(form.consultationFee >= 0)) return setError('Enter a consultation fee of 0 or more')
+    if (sessionError) return fail('hours', sessionError)
+    if (!(form.slotMinutes >= 5 && form.slotMinutes <= 120)) return fail('hours', 'Slot length must be 5–120 minutes')
+    if (!(form.consultationFee >= 0)) return fail('billing', 'Enter a consultation fee of 0 or more')
     if (!(Number.isInteger(form.defaultDueDays) && form.defaultDueDays >= 1 && form.defaultDueDays <= 365))
-      return setError('Default due days must be 1–365')
-    if (!form.whatsappDueTemplate.trim()) return setError('Enter a WhatsApp reminder message')
+      return fail('billing', 'Default due days must be 1–365')
+    if (!form.whatsappDueTemplate.trim()) return fail('whatsapp', 'Enter a WhatsApp reminder message')
+    if ((form.whatsappTemplates ?? []).some((t) => !t.name.trim() || !t.body.trim()))
+      return fail('whatsapp', 'Enter a name and message for every WhatsApp template')
     for (const k of CERT_KINDS) {
       if (!form.certTypes[k].title.trim() || !form.certTypes[k].template.trim())
-        return setError(`Enter a title and wording for the ${KIND_LABEL[k].toLowerCase()}`)
+        return fail('certificates', `Enter a title and wording for the ${KIND_LABEL[k].toLowerCase()}`)
     }
     setError('')
     const normalized = {
@@ -171,10 +207,34 @@ export function Settings() {
   }
 
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-4xl">
       <h1 className="text-2xl font-semibold">Settings</h1>
 
-      <form onSubmit={handleSubmit} className="card mt-4 space-y-4">
+      <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-start">
+        <nav
+          aria-label="Settings sections"
+          className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-1 md:sticky md:top-20 md:mx-0 md:w-48 md:shrink-0 md:flex-col md:overflow-visible md:px-0 md:pb-0"
+        >
+          {TABS.map((t) => (
+            <Link
+              key={t.id}
+              to={{ search: `?tab=${t.id}` }}
+              replace
+              aria-current={tab === t.id ? 'page' : undefined}
+              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 ${
+                tab === t.id ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {t.label}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="min-w-0 max-w-2xl flex-1">
+          {FORM_TABS.includes(tab) && (
+            <form onSubmit={handleSubmit} className="card space-y-4">
+              {tab === 'clinic' && (
+                <>
         <h2 className="font-semibold">Clinic profile</h2>
         <p className="text-sm text-slate-500">Shown on prescriptions, receipts, OP slips and certificates.</p>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -226,7 +286,11 @@ export function Settings() {
           </p>
         </div>
 
-        <h2 className="border-t border-slate-100 pt-4 font-semibold">Clinic hours</h2>
+                </>
+              )}
+              {tab === 'hours' && (
+                <>
+        <h2 className="font-semibold">Clinic hours</h2>
         <p className="text-sm text-slate-500">Sessions are shaded as working hours on the calendar.</p>
         <ul className="space-y-2">
           {form.sessions.map((s, i) => (
@@ -288,7 +352,11 @@ export function Settings() {
             onChange={(n) => set('slotMinutes', n)}
           />
         </div>
-        <h2 className="border-t border-slate-100 pt-4 font-semibold">Billing</h2>
+                </>
+              )}
+              {tab === 'billing' && (
+                <>
+        <h2 className="font-semibold">Billing</h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className="label" htmlFor="consultationFee">
@@ -317,24 +385,12 @@ export function Settings() {
               onChange={(n) => set('defaultDueDays', n)}
             />
           </div>
-          <div className="sm:col-span-2">
-            <label className="label" htmlFor="whatsappDueTemplate">
-              WhatsApp due reminder
-            </label>
-            <textarea
-              id="whatsappDueTemplate"
-              rows={3}
-              className="input"
-              value={form.whatsappDueTemplate}
-              onChange={(e) => set('whatsappDueTemplate', e.target.value)}
-            />
-            <p className="mt-1 text-xs text-slate-500">
-              Placeholders: {'{name} {balance} {clinic} {opNo} {dueDate}'}. The balance is filled in as ₹ with the amount.
-            </p>
-          </div>
         </div>
-
-        <h2 className="border-t border-slate-100 pt-4 font-semibold">Certificates</h2>
+                </>
+              )}
+              {tab === 'certificates' && (
+                <>
+        <h2 className="font-semibold">Certificates</h2>
         <div className="grid gap-4">
           <div className="max-w-xs">
             <label className="label" htmlFor="certPlace">
@@ -355,33 +411,62 @@ export function Settings() {
           ))}
         </div>
 
-        {error && (
-          <p role="alert" className="text-sm text-red-700">
-            {error}
-          </p>
-        )}
+                </>
+              )}
+              {tab === 'whatsapp' && (
+                <>
+                  <h2 className="font-semibold">WhatsApp</h2>
+                  <div>
+                    <label className="label" htmlFor="whatsappDueTemplate">
+                      WhatsApp due reminder
+                    </label>
+                    <PlaceholderTextarea
+                      id="whatsappDueTemplate"
+                      rows={3}
+                      value={form.whatsappDueTemplate}
+                      onChange={(v) => set('whatsappDueTemplate', v)}
+                      tokens={DUE_TOKENS}
+                    />
+                    <p className="mt-1 text-xs text-slate-500">
+                      Placeholders: {'{name} {balance} {clinic} {opNo} {dueDate}'}. The balance is filled in as ₹ with the amount.
+                    </p>
+                  </div>
+                  <h3 className="border-t border-slate-100 pt-4 font-semibold">Message templates</h3>
+                  <WhatsAppTemplatesEditor
+                    settings={form}
+                    templates={form.whatsappTemplates ?? []}
+                    onChange={(next) => set('whatsappTemplates', next)}
+                  />
+                </>
+              )}
 
-        <div className="flex items-center gap-3">
-          <button type="submit" className="btn-primary">
-            Save
-          </button>
-          {saved && <span className="text-sm text-brand-700">Saved</span>}
-        </div>
-      </form>
+              {error && (
+                <p role="alert" className="text-sm text-red-700">
+                  {error}
+                </p>
+              )}
 
-      <BrandingSettings />
+              <div className="flex items-center gap-3">
+                <button type="submit" className="btn-primary">
+                  Save
+                </button>
+                {saved && <span className="text-sm text-brand-700">Saved</span>}
+              </div>
+            </form>
+          )}
 
-      <RemediesSettings />
-
-      <SyncSettings />
-
-      <ExportAllCard />
-
-      <NotificationSettings />
-
-      <StorageCard />
-
-      <div className="card mt-4 space-y-3">
+          {tab === 'branding' && <BrandingSettings />}
+          {tab === 'remedies' && <RemediesSettings />}
+          {tab === 'notifications' && <NotificationSettings />}
+          {tab === 'data' && (
+            <div className="space-y-4">
+              <SyncSettings />
+              <ExportAllCard />
+              <StorageCard />
+            </div>
+          )}
+          {tab === 'account' && (
+      <div className="card space-y-3">
         <h2 className="font-semibold">Account</h2>
         {profile && (
           <p className="text-sm text-slate-600">
@@ -395,6 +480,9 @@ export function Settings() {
         <button className="btn-ghost border border-slate-300" onClick={() => signOut().then(() => navigate('/', { replace: true }))}>
           Sign out
         </button>
+      </div>
+          )}
+        </div>
       </div>
     </div>
   )

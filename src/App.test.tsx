@@ -130,7 +130,7 @@ describe('signed-in app', () => {
   it('signs out to the sign-in screen but keeps local data', async () => {
     signedIn()
     await insert<Patient>(db.patients, { opNo: 'OP-1', name: 'A' })
-    goTo('/settings')
+    goTo('/settings?tab=account')
     render(<App />)
 
     await userEvent.click(await screen.findByRole('button', { name: 'Sign out' }))

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import App from '../../App'
@@ -17,7 +17,7 @@ describe('settings number fields', () => {
   it('can be cleared before typing a new value, and falls back to a default if left blank', async () => {
     await saveSettings({ ...(await getSettings()), consultationFee: 300 })
     localStorage.setItem('auth:profile', JSON.stringify({ sub: '1', email: 'd@x.com', name: 'D' }))
-    window.history.replaceState(null, '', '/settings')
+    window.history.replaceState(null, '', '/settings?tab=billing')
     render(<App />)
     const user = userEvent.setup()
 
@@ -38,5 +38,26 @@ describe('settings number fields', () => {
     expect(fee).toHaveValue(450)
     await user.click(screen.getByRole('button', { name: 'Save' }))
     await vi.waitFor(async () => expect((await getSettings()).consultationFee).toBe(450))
+  })
+})
+
+describe('whatsapp placeholder tags', () => {
+  it('inserts a placeholder at the caret, replacing the selection, and keeps the caret after it', async () => {
+    localStorage.setItem('auth:profile', JSON.stringify({ sub: '1', email: 'd@x.com', name: 'D' }))
+    window.history.replaceState(null, '', '/settings?tab=whatsapp')
+    render(<App />)
+    const user = userEvent.setup()
+
+    const body = (await screen.findByLabelText('Template 1 message')) as HTMLTextAreaElement
+    await user.clear(body)
+    await user.type(body, 'Hi XX, welcome')
+    body.setSelectionRange(3, 5) // select "XX"
+    const group = screen.getAllByRole('group', { name: 'Insert placeholder' })[1]
+    await user.click(within(group).getByRole('button', { name: '+ Name' }))
+
+    expect(body).toHaveValue('Hi {name}, welcome')
+    expect(body).toHaveFocus()
+    expect(body.selectionStart).toBe('Hi {name}'.length)
+    expect(body.selectionEnd).toBe('Hi {name}'.length)
   })
 })

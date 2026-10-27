@@ -225,7 +225,7 @@ describe('stock UI', () => {
     const ars = await remedyId('Arsenicum album')
     await createStockItem({ ...base, remedyId: ars, potency: '30C' })
     const user = userEvent.setup()
-    open('/settings')
+    open('/settings?tab=remedies')
     await user.type(await screen.findByLabelText('Search remedies'), 'Arsenicum album')
     await user.click(await screen.findByRole('button', { name: 'Delete Arsenicum album' }))
     expect(await screen.findByText(/1 stock item uses this remedy/)).toBeInTheDocument()
