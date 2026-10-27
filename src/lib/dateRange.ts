@@ -42,6 +42,12 @@ export function presetRange(preset: Exclude<RangePreset, 'custom'>, today: strin
   }
 }
 
+// Whole calendar month for a "YYYY-MM" key, e.g. 2026-10 -> 2026-10-01..2026-10-31.
+export function monthRange(ym: string): DateRange {
+  const [y, m] = ym.split('-').map(Number)
+  return { from: toISODate(new Date(y, m - 1, 1)), to: toISODate(new Date(y, m, 0)) }
+}
+
 const ISO = /^\d{4}-\d{2}-\d{2}$/
 
 export function isISODate(s: string | null | undefined): s is string {
