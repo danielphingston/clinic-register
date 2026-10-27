@@ -325,7 +325,7 @@ describe('RemedyAutocomplete', () => {
 describe('settings: remedies', () => {
   it('adds, searches, edits and deletes a custom remedy', async () => {
     const user = userEvent.setup()
-    open('/settings')
+    open('/settings?tab=remedies')
     await user.type(await screen.findByLabelText('New remedy name'), 'Covid nosode')
     await user.type(screen.getByLabelText('Abbreviation'), 'Cov-n.')
     await user.click(screen.getByRole('button', { name: 'Add remedy' }))

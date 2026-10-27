@@ -37,9 +37,9 @@ export function Layout() {
 
   return (
     <div className="flex min-h-screen">
-      <aside aria-label="Sidebar" className="no-print hidden w-56 shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
+      <aside aria-label="Sidebar" className="no-print sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
         <div className="px-4 py-5 text-lg font-semibold text-brand-700">Clinic Register</div>
-        <nav className="flex flex-1 flex-col gap-1 px-2">
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-2">
           {NAV.map((n) => (
             <NavLink key={n.to} to={n.to} end={n.to === '/'} className={navClass}>
               <span className="w-5 text-center">{n.icon}</span>
