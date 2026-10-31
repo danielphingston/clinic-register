@@ -3,19 +3,25 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom'
 import { Modal } from '../../app/Modal'
 import { db } from '../../db/db'
-import type { CaseNotes, Visit } from '../../db/types'
+import type { CaseNotes, ComplaintStatusValue, GeneralsChecklist, Visit } from '../../db/types'
 import { ageSex } from '../../lib/age'
 import { addDays, formatDate, todayISO } from '../../lib/format'
 import { RemedyAutocomplete } from '../remedies/RemedyAutocomplete'
 import { remedyMap } from '../remedies/remedyRepo'
 import { POTENCY_PRESETS, REPETITION_PRESETS, rxDetails } from './rxFormat'
 import { blankRow, repeatRows, rowsFromItems, rowsToInput, type RxRow } from './rxRows'
+import { cleanChecklist, cleanStatuses, complaintLines, normaliseComplaints, previousComplaints } from './caseNotes'
+import { ComplaintLines, ComplaintStatusRows, GeneralsChecklistFields } from './CaseNoteFields'
 import { itemsForVisit, previousVisit, saveVisit } from './visitRepo'
 import { completeAppointmentForVisit } from '../appointments/appointmentRepo'
 import { DispenseField } from '../stock/DispenseField'
 import { VisitAttachments } from '../attachments/VisitAttachments'
 
-const TABS: { key: keyof CaseNotes; label: string }[] = [
+// The free-text tabs; complaints and the generals checklist are structured fields beside them.
+type NoteKey = 'complaint' | 'history' | 'mentals' | 'generals' | 'modalities' | 'constitution'
+type TextNotes = Pick<CaseNotes, NoteKey>
+
+const TABS: { key: NoteKey; label: string }[] = [
   { key: 'complaint', label: 'Complaint' },
   { key: 'history', label: 'History' },
   { key: 'mentals', label: 'Mentals' },
@@ -38,8 +44,12 @@ function VisitFormInner() {
 
   const [loaded, setLoaded] = useState<Visit | null | undefined>(visitId ? undefined : null)
   const [date, setDate] = useState(todayISO())
-  const [notes, setNotes] = useState<CaseNotes>({})
-  const [tab, setTab] = useState<keyof CaseNotes>('complaint')
+  const [notes, setNotes] = useState<TextNotes>({})
+  const [complaints, setComplaints] = useState<string[]>([''])
+  const [checklist, setChecklist] = useState<GeneralsChecklist>({})
+  // Progress of the previous visit's complaints, keyed by lowercased complaint.
+  const [statuses, setStatuses] = useState<Record<string, ComplaintStatusValue | undefined>>({})
+  const [tab, setTab] = useState<NoteKey>('complaint')
   const [advice, setAdvice] = useState('')
   const [followUp, setFollowUp] = useState('')
   const [rows, setRows] = useState<RxRow[]>(() => [blankRow()])
@@ -62,7 +72,12 @@ function VisitFormInner() {
       const items = await itemsForVisit(v.id)
       if (cancelled) return
       setDate(v.date)
-      setNotes(v.caseNotes ?? {})
+      const { history, mentals, generals, modalities, constitution } = v.caseNotes ?? {}
+      setNotes({ history, mentals, generals, modalities, constitution })
+      const lines = complaintLines(v.caseNotes)
+      setComplaints(lines.length ? lines : [''])
+      setChecklist(v.caseNotes?.generalsChecklist ?? {})
+      setStatuses(Object.fromEntries((v.caseNotes?.complaintStatus ?? []).map((s) => [s.complaint.toLowerCase(), s.status])))
       setAdvice(v.advice ?? '')
       setFollowUp(v.followUpDate ?? '')
       setRows(items.length ? rowsFromItems(items, true) : [blankRow()])
@@ -84,9 +99,26 @@ function VisitFormInner() {
 
   // Unsaved-changes guard: losing a half-written case history is the worst
   // failure here. Compare the form with what it was when it opened.
+  // Complaints from the earlier visit to ask about, plus any statuses already
+  // saved on this visit (the earlier visit may have been edited since).
+  const asked = (() => {
+    const list = prev ? previousComplaints(prev.visit.caseNotes) : []
+    const known = new Set(list.map((c) => c.toLowerCase()))
+    for (const s of loaded?.caseNotes.complaintStatus ?? []) if (!known.has(s.complaint.toLowerCase())) list.push(s.complaint)
+    return list
+  })()
+  const lines = normaliseComplaints(complaints)
+  const caseNotes: CaseNotes = {
+    ...Object.fromEntries(Object.entries(notes).filter(([, v]) => v?.trim())),
+    ...(lines.length && { complaint: lines.join('\n'), complaints: lines }),
+    generalsChecklist: cleanChecklist(checklist),
+    complaintStatus: cleanStatuses(asked, statuses),
+  }
+  if (!caseNotes.generalsChecklist) delete caseNotes.generalsChecklist
+  if (!caseNotes.complaintStatus?.length) delete caseNotes.complaintStatus
   const snapshot = JSON.stringify({
     date,
-    notes: Object.entries(notes).filter(([, v]) => v?.trim()),
+    notes: caseNotes,
     advice: advice.trim(),
     followUp,
     rows: rows.map((r) => ({ ...r, key: undefined })),
@@ -136,7 +168,7 @@ function VisitFormInner() {
         id: loaded?.id,
         patientId,
         date,
-        caseNotes: Object.fromEntries(Object.entries(notes).filter(([, v]) => v?.trim())),
+        caseNotes,
         advice,
         followUpDate: followUp,
         items,
@@ -188,21 +220,41 @@ function VisitFormInner() {
               }`}
             >
               {t.label}
-              {notes[t.key]?.trim() && tab !== t.key && <span className="ml-1 text-brand-600">•</span>}
+              {(t.key === 'complaint' ? lines.length > 0 : notes[t.key]?.trim()) && tab !== t.key && <span className="ml-1 text-brand-600">•</span>}
             </button>
           ))}
         </div>
         <div role="tabpanel" id="case-panel" aria-labelledby={`tab-${tab}`}>
-          <textarea
-            key={tab}
-            className="input"
-            rows={5}
-            aria-label={TABS.find((t) => t.key === tab)!.label}
-            value={notes[tab] ?? ''}
-            onChange={(e) => setNotes((n) => ({ ...n, [tab]: e.target.value }))}
-          />
+          {tab === 'complaint' ? (
+            <ComplaintLines lines={complaints} onChange={setComplaints} />
+          ) : (
+            <>
+              {tab === 'generals' && <GeneralsChecklistFields value={checklist} onChange={setChecklist} />}
+              <textarea
+                key={tab}
+                className="input"
+                rows={5}
+                aria-label={tab === 'generals' ? 'Other generals' : TABS.find((t) => t.key === tab)!.label}
+                value={notes[tab] ?? ''}
+                onChange={(e) => setNotes((n) => ({ ...n, [tab]: e.target.value }))}
+              />
+            </>
+          )}
         </div>
       </section>
+
+      {asked.length > 0 && (
+        <section className="card space-y-2 text-sm" aria-labelledby="prevc-heading">
+          <h2 id="prevc-heading" className="font-semibold">
+            Previous complaints
+          </h2>
+          <ComplaintStatusRows
+            complaints={asked}
+            statuses={statuses}
+            onChange={(c, status) => setStatuses((s) => ({ ...s, [c.toLowerCase()]: status }))}
+          />
+        </section>
+      )}
 
       <div className="grid gap-4 2xl:grid-cols-3">
         <section className="card space-y-2 text-sm 2xl:order-2" aria-labelledby="prev-heading">

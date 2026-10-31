@@ -2,6 +2,7 @@ import { db } from '../../db/db'
 import type { BaseRecord } from '../../db/types'
 import { toISODate, todayISO } from '../../lib/format'
 import { remedyMap } from '../remedies/remedyRepo'
+import { checklistSummary, statusSummary } from '../visits/caseNotes'
 import { buildSheetsWorkbook } from './excel'
 
 type Row = Record<string, string | number | undefined>
@@ -47,6 +48,8 @@ export async function allDataSheets(): Promise<{ name: string; rows: Row[] }[]> 
           History: v.caseNotes?.history,
           Mentals: v.caseNotes?.mentals,
           Generals: v.caseNotes?.generals,
+          'Generals checklist': checklistSummary(v.caseNotes?.generalsChecklist),
+          'Complaint status': statusSummary(v.caseNotes?.complaintStatus).join('; '),
           Modalities: v.caseNotes?.modalities,
           Constitution: v.caseNotes?.constitution,
           Advice: v.advice,

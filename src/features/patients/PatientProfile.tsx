@@ -13,6 +13,7 @@ import { PatientAttachments } from '../attachments/PatientAttachments'
 import { PatientDiagnoses } from './PatientDiagnoses'
 import { PatientCertificates } from '../certificates/PatientCertificates'
 import { WhatsAppTemplateButton } from './WhatsAppTemplateButton'
+import { checklistSummary, statusSummary } from '../visits/caseNotes'
 
 export function PatientProfile() {
   const { id = '' } = useParams()
@@ -104,6 +105,16 @@ export function PatientProfile() {
                     </span>
                   </div>
                   {v.caseNotes.complaint && <p className="mt-1 whitespace-pre-line text-sm">{v.caseNotes.complaint}</p>}
+                  {v.caseNotes.complaintStatus?.length ? (
+                    <p className="mt-1 text-sm text-slate-600" data-testid="visit-statuses">
+                      {statusSummary(v.caseNotes.complaintStatus).join(' · ')}
+                    </p>
+                  ) : null}
+                  {checklistSummary(v.caseNotes.generalsChecklist) && (
+                    <p className="mt-1 text-sm text-slate-600" data-testid="visit-generals">
+                      {checklistSummary(v.caseNotes.generalsChecklist)}
+                    </p>
+                  )}
                   {rx.length > 0 && (
                     <ul className="mt-2 space-y-0.5 text-sm">
                       {rx.map((i) => (
