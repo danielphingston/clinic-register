@@ -22,8 +22,33 @@ export interface Patient extends BaseRecord {
   diagnoses?: string[] // absent on records created before the field existed
 }
 
+export type Level = 'increased' | 'decreased' | 'normal'
+export type UrineOption = 'anuria' | 'oliguria' | 'frequent' | 'nocturnal' | 'normal'
+
+// Quick-pick generals; every field is optional and unset means "not asked".
+export interface GeneralsChecklist {
+  appetite?: Level
+  thirst?: Level
+  urine?: UrineOption[]
+  sleep?: 'sound' | 'disturbed' | 'sleeplessness'
+  stool?: 'regular' | 'irregular' | 'constipation'
+  constipationDays?: number // only with stool = constipation
+  sweat?: Level
+  sweatParts?: string // only with sweat = increased
+}
+
+export type ComplaintStatusValue = 'persists' | 'better' | 'worse' | 'resolved'
+
+export interface ComplaintStatus {
+  complaint: string
+  status: ComplaintStatusValue
+}
+
 export interface CaseNotes {
-  complaint?: string
+  complaint?: string // complaints joined with newlines; kept for print, certificates and reports
+  complaints?: string[] // absent on records created before the list existed
+  complaintStatus?: ComplaintStatus[] // progress of the previous visit's complaints
+  generalsChecklist?: GeneralsChecklist
   history?: string
   mentals?: string
   generals?: string

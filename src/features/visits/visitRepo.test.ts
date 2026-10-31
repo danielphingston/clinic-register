@@ -8,6 +8,18 @@ import { followUpsDue, itemsForVisit, previousVisit, recentPatients, saveVisit }
 const rx = (remedyId: string, potency = '30C') => ({ remedyId, potency, dose: '4 pills', repetition: 'TDS', durationDays: 7 })
 
 describe('saveVisit', () => {
+  it('round-trips structured case notes', async () => {
+    const p = await createPatient({ name: 'Asha' })
+    const caseNotes = {
+      complaint: 'Headache\nCough',
+      complaints: ['Headache', 'Cough'],
+      complaintStatus: [{ complaint: 'Acidity', status: 'better' as const }],
+      generalsChecklist: { appetite: 'decreased' as const, urine: ['normal' as const] },
+    }
+    const id = await saveVisit({ patientId: p.id, date: '2026-10-01', caseNotes, items: [] })
+    expect((await db.visits.get(id))?.caseNotes).toEqual(caseNotes)
+  })
+
   it('creates a visit with its Rx, then updates and soft-deletes removed rows', async () => {
     const p = await createPatient({ name: 'Asha' })
     const id = await saveVisit({

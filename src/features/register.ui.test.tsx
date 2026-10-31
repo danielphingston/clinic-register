@@ -169,7 +169,7 @@ describe('visit UI', () => {
     open(`/patients/${p.id}/visits/new`)
 
     expect(await screen.findByLabelText('Visit date')).toHaveValue(todayISO())
-    await user.type(screen.getByRole('textbox', { name: 'Complaint' }), 'Migraine')
+    await user.type(screen.getByRole('textbox', { name: 'Complaint 1' }), 'Migraine')
     await user.click(screen.getByRole('tab', { name: 'Mentals' }))
     await user.type(screen.getByRole('textbox', { name: 'Mentals' }), 'Anxious')
 
@@ -195,7 +195,7 @@ describe('visit UI', () => {
     expect(within(visit).getByText('4 pills · TDS · 7 days', { exact: false })).toBeInTheDocument()
     expect(within(visit).getByText('Nux vomica')).toBeInTheDocument()
     const [v] = await visitsForPatient(p.id)
-    expect(v.caseNotes).toEqual({ complaint: 'Migraine', mentals: 'Anxious' })
+    expect(v.caseNotes).toEqual({ complaint: 'Migraine', complaints: ['Migraine'], mentals: 'Anxious' })
     expect(v.advice).toBe('No coffee')
 
     await user.click(within(visit).getByRole('link', { name: 'Open' }))
@@ -211,6 +211,56 @@ describe('visit UI', () => {
     expect(all.filter((i) => i.deleted === 1).map((i) => i.remedyId)).toEqual([await remedyId('Pulsatilla nigricans')])
   })
 
+  it('records complaint lines and generals, then tracks their status at a follow-up', async () => {
+    const user = userEvent.setup()
+    const p = await createPatient({ name: 'Asha' })
+    open(`/patients/${p.id}/visits/new`)
+
+    await user.type(await screen.findByRole('textbox', { name: 'Complaint 1' }), 'Headache')
+    await user.click(screen.getByRole('button', { name: 'Add complaint' }))
+    await user.type(screen.getByRole('textbox', { name: 'Complaint 2' }), 'Cough{Enter}')
+    expect(screen.getByRole('textbox', { name: 'Complaint 3' })).toHaveFocus()
+    await user.click(screen.getByRole('button', { name: 'Remove complaint 3' }))
+    expect(screen.queryByRole('textbox', { name: 'Complaint 3' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: 'Generals' }))
+    const pill = (group: string, name: string) => within(screen.getByRole('group', { name: group })).getByRole('button', { name })
+    await user.click(pill('Appetite', 'Decreased'))
+    await user.click(pill('Urine', 'Frequent micturition'))
+    await user.click(pill('Urine', 'Normal'))
+    expect(pill('Urine', 'Frequent micturition')).toHaveAttribute('aria-pressed', 'false')
+    await user.click(pill('Stool', 'Constipation'))
+    await user.type(screen.getByLabelText('Constipation days'), '3')
+    await user.click(pill('Sweat', 'Increased'))
+    await user.type(screen.getByLabelText('Body part(s)'), 'palms')
+    await user.click(pill('Thirst', 'Increased'))
+    await user.click(pill('Thirst', 'Increased'))
+    expect(pill('Thirst', 'Increased')).toHaveAttribute('aria-pressed', 'false')
+    await user.click(screen.getByRole('button', { name: 'Save visit' }))
+
+    const visit = await screen.findByTestId('visit')
+    expect(within(visit).getByTestId('visit-generals')).toHaveTextContent('Appetite: Decreased · Urine: Normal · Stool: Constipation (every 3 days) · Sweat: Increased (palms)')
+    const [first] = await visitsForPatient(p.id)
+    expect(first.caseNotes).toEqual({
+      complaint: 'Headache\nCough',
+      complaints: ['Headache', 'Cough'],
+      generalsChecklist: { appetite: 'decreased', urine: ['normal'], stool: 'constipation', constipationDays: 3, sweat: 'increased', sweatParts: 'palms' },
+    })
+
+    await user.click(screen.getByRole('link', { name: 'New visit' }))
+    expect(await screen.findByRole('heading', { name: 'Previous complaints' })).toBeInTheDocument()
+    const headache = screen.getByRole('group', { name: 'Headache' })
+    expect(within(screen.getByRole('group', { name: 'Cough' })).getAllByRole('button').map((b) => b.textContent)).toEqual(['Persists', 'Better', 'Worsened', 'Resolved'])
+    await user.click(within(headache).getByRole('button', { name: 'Better' }))
+    expect(within(headache).getByRole('button', { name: 'Better' })).toHaveAttribute('aria-pressed', 'true')
+    await user.click(screen.getByRole('button', { name: 'Save visit' }))
+
+    await waitFor(async () => expect(await visitsForPatient(p.id)).toHaveLength(2))
+    const [latest] = await visitsForPatient(p.id)
+    expect(latest.caseNotes.complaintStatus).toEqual([{ complaint: 'Headache', status: 'better' }])
+    expect((await screen.findAllByTestId('visit-statuses'))[0]).toHaveTextContent('Headache — Better')
+  })
+
   it('asks before leaving a visit with unsaved changes', async () => {
     const user = userEvent.setup()
     const p = await createPatient({ name: 'Asha' })
@@ -220,11 +270,11 @@ describe('visit UI', () => {
     expect(await screen.findByRole('heading', { name: 'Asha' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('link', { name: 'New visit' }))
-    await user.type(await screen.findByRole('textbox', { name: 'Complaint' }), 'Headache')
+    await user.type(await screen.findByRole('textbox', { name: 'Complaint 1' }), 'Headache')
     await user.click(screen.getByRole('link', { name: 'Cancel' }))
     const dialog = await screen.findByRole('dialog', { name: 'Leave without saving?' })
     await user.click(within(dialog).getByRole('button', { name: 'Keep editing' }))
-    expect(screen.getByRole('textbox', { name: 'Complaint' })).toHaveValue('Headache')
+    expect(screen.getByRole('textbox', { name: 'Complaint 1' })).toHaveValue('Headache')
 
     await user.click(screen.getByRole('link', { name: 'Cancel' }))
     await user.click(within(await screen.findByRole('dialog', { name: 'Leave without saving?' })).getByRole('button', { name: 'Discard changes' }))

@@ -8,6 +8,12 @@
 4. **Billing**: the bill is prefilled with the consultation fee and the dispensed medicines. Enter the amount paid now. Any balance gets a due date and appears under **Billing → Dues**. Use **+ Medicine from stock** for a counter sale; voiding or editing the bill returns the stock.
 5. **Evening**: review **Reports → OP Register** for the day and today's collection on the dashboard.
 
+## Case notes
+
+- **Complaints**: write one complaint per line. Press **+** (or Enter) to add another line and **×** to remove one.
+- **Previous complaints**: on a follow-up visit, the previous visit's complaints are listed with **Persists / Better / Worsened / Resolved**. Complaints not marked Resolved carry forward to the next follow-up. The statuses appear in the patient's visit history.
+- **Generals**: pick Appetite, Thirst, Urine (several allowed), Sleep, Stool (with days between stools for constipation) and Sweat (with the body part when increased). Click a selected option again to clear it. Anything else goes in **Other generals**. These are kept in the record and are not printed on the prescription.
+
 ## Patient page
 
 - **Diagnosis**: record one or more diagnoses per patient. Type one and press Enter, and remove one with the × on its chip. Diagnoses used for other patients are suggested as you type.
