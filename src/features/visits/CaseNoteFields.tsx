@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
-import type { ComplaintStatusValue, GeneralsChecklist } from '../../db/types'
-import { LEVELS, SLEEP_OPTIONS, STATUS_OPTIONS, STOOL_OPTIONS, URINE_OPTIONS } from './caseNotes'
+import type { ComplaintDetail, ComplaintStatusValue, GeneralsChecklist } from '../../db/types'
+import { hasTerm, LEVELS, MODALITY_QUICK_PICKS, SLEEP_OPTIONS, STATUS_OPTIONS, STOOL_OPTIONS, toggleTerm, URINE_OPTIONS } from './caseNotes'
+import type { TermField } from './visitRepo'
 
 function Pill({ pressed, onClick, children }: { pressed: boolean; onClick: () => void; children: string }) {
   return (
@@ -89,46 +90,120 @@ export function GeneralsChecklistFields({ value, onChange }: { value: GeneralsCh
   )
 }
 
-// One single-line input per complaint. Enter adds a line below and focuses it.
-export function ComplaintLines({ lines, onChange }: { lines: string[]; onChange: (lines: string[]) => void }) {
+const TERM_FIELDS: { key: TermField; label: string; placeholder: string }[] = [
+  { key: 'location', label: 'Location', placeholder: 'e.g. Head, right temple, extending to eye' },
+  { key: 'sensation', label: 'Sensation', placeholder: 'e.g. Throbbing, bursting' },
+  { key: 'duration', label: 'Duration', placeholder: 'e.g. 3 months, after a fall' },
+]
+
+// Modality input with quick chips that add or remove a term in the text.
+function Modality({ n, field, title, sign, value, onChange }: { n: number; field: string; title: string; sign: string; value?: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <label className="label" htmlFor={`c${n}-${field}`}>
+        {title} ({sign})
+      </label>
+      <input id={`c${n}-${field}`} className="input" aria-label={`${title} ${n}`} value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
+      <div role="group" aria-label={`${title} ${n} quick picks`} className="mt-1.5 flex flex-wrap gap-1">
+        {MODALITY_QUICK_PICKS.map((t) => (
+          <button
+            key={t}
+            type="button"
+            aria-pressed={hasTerm(value, t)}
+            onClick={() => onChange(toggleTerm(value, t))}
+            className={`rounded-full border px-2 py-0.5 text-xs ${hasTerm(value, t) ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-100'}`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// One card per complaint: location, sensation, duration, modalities, concomitants.
+export function ComplaintCards({ cards, known, onChange }: { cards: ComplaintDetail[]; known?: Record<TermField, string[]>; onChange: (cards: ComplaintDetail[]) => void }) {
   const focus = useRef<number | null>(null)
   useEffect(() => {
     if (focus.current === null) return
-    document.querySelector<HTMLInputElement>(`[aria-label="Complaint ${focus.current + 1}"]`)?.focus()
+    document.querySelector<HTMLInputElement>(`[aria-label="Location ${focus.current + 1}"]`)?.focus()
     focus.current = null
-  }, [lines.length])
-  function insertAfter(i: number) {
-    focus.current = i + 1
-    onChange([...lines.slice(0, i + 1), '', ...lines.slice(i + 1)])
-  }
+  }, [cards.length])
+  const set = (i: number, changes: ComplaintDetail) => onChange(cards.map((c, j) => (j === i ? { ...c, ...changes } : c)))
   return (
-    <div className="space-y-2">
-      {lines.map((line, i) => (
-        <div key={i} className="flex gap-2">
-          <input
-            className="input"
-            aria-label={`Complaint ${i + 1}`}
-            value={line}
-            onChange={(e) => onChange(lines.map((l, j) => (j === i ? e.target.value : l)))}
-            onKeyDown={(e) => {
-              if (e.key !== 'Enter') return
-              e.preventDefault()
-              insertAfter(i)
-            }}
-          />
-          <button
-            type="button"
-            className="btn-ghost px-2 text-red-700"
-            aria-label={`Remove complaint ${i + 1}`}
-            title="Remove"
-            onClick={() => onChange(lines.length > 1 ? lines.filter((_, j) => j !== i) : [''])}
-          >
-            ×
-          </button>
+    <div className="space-y-3">
+      {TERM_FIELDS.map((f) => (
+        <datalist key={f.key} id={`known-${f.key}`}>
+          {(known?.[f.key] ?? []).map((t) => (
+            <option key={t} value={t} />
+          ))}
+        </datalist>
+      ))}
+      {cards.map((c, i) => (
+        <div key={i} role="group" aria-label={`Complaint ${i + 1}`} className="rounded-md border border-slate-200 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm font-semibold text-slate-700">Complaint {i + 1}</span>
+            <button
+              type="button"
+              className="btn-ghost px-2 py-0.5 text-red-700"
+              aria-label={`Remove complaint ${i + 1}`}
+              title="Remove"
+              onClick={() => onChange(cards.length > 1 ? cards.filter((_, j) => j !== i) : [{}])}
+            >
+              ×
+            </button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {TERM_FIELDS.map((f) => (
+              <div key={f.key} className={f.key === 'location' ? 'sm:col-span-2' : ''}>
+                <label className="label" htmlFor={`c${i + 1}-${f.key}`}>
+                  {f.label}
+                </label>
+                <input
+                  id={`c${i + 1}-${f.key}`}
+                  className="input"
+                  aria-label={`${f.label} ${i + 1}`}
+                  placeholder={f.placeholder}
+                  list={`known-${f.key}`}
+                  value={c[f.key] ?? ''}
+                  onChange={(e) => set(i, { [f.key]: e.target.value })}
+                />
+              </div>
+            ))}
+            <Modality n={i + 1} field="worse" title="Worse" sign="<" value={c.worse} onChange={(worse) => set(i, { worse })} />
+            <Modality n={i + 1} field="better" title="Better" sign=">" value={c.better} onChange={(better) => set(i, { better })} />
+            <div>
+              <label className="label" htmlFor={`c${i + 1}-concomitants`}>
+                Concomitants
+              </label>
+              <input
+                id={`c${i + 1}-concomitants`}
+                className="input"
+                aria-label={`Concomitants ${i + 1}`}
+                placeholder="e.g. Nausea, photophobia"
+                list="known-concomitants"
+                value={c.concomitants ?? ''}
+                onChange={(e) => set(i, { concomitants: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor={`c${i + 1}-note`}>
+                Other notes
+              </label>
+              <input id={`c${i + 1}-note`} className="input" aria-label={`Other notes ${i + 1}`} value={c.note ?? ''} onChange={(e) => set(i, { note: e.target.value })} />
+            </div>
+          </div>
         </div>
       ))}
-      <button type="button" className="btn-ghost border border-slate-300 px-3 py-1" aria-label="Add complaint" title="Add complaint" onClick={() => insertAfter(lines.length - 1)}>
-        +
+      <button
+        type="button"
+        className="btn-ghost border border-slate-300 px-3 py-1"
+        onClick={() => {
+          focus.current = cards.length
+          onChange([...cards, {}])
+        }}
+      >
+        + Add complaint
       </button>
     </div>
   )

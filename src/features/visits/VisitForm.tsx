@@ -3,16 +3,16 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom'
 import { Modal } from '../../app/Modal'
 import { db } from '../../db/db'
-import type { CaseNotes, ComplaintStatusValue, GeneralsChecklist, Visit } from '../../db/types'
+import type { CaseNotes, ComplaintDetail, ComplaintStatusValue, GeneralsChecklist, Visit } from '../../db/types'
 import { ageSex } from '../../lib/age'
 import { addDays, formatDate, todayISO } from '../../lib/format'
 import { RemedyAutocomplete } from '../remedies/RemedyAutocomplete'
 import { remedyMap } from '../remedies/remedyRepo'
 import { POTENCY_PRESETS, REPETITION_PRESETS, rxDetails } from './rxFormat'
 import { blankRow, repeatRows, rowsFromItems, rowsToInput, type RxRow } from './rxRows'
-import { cleanChecklist, cleanStatuses, complaintLines, normaliseComplaints, previousComplaints } from './caseNotes'
-import { ComplaintLines, ComplaintStatusRows, GeneralsChecklistFields } from './CaseNoteFields'
-import { itemsForVisit, previousVisit, saveVisit } from './visitRepo'
+import { cleanChecklist, cleanDetails, cleanStatuses, complaintSummary, defaultGenerals, detailsFromNotes, previousComplaints } from './caseNotes'
+import { ComplaintCards, ComplaintStatusRows, GeneralsChecklistFields } from './CaseNoteFields'
+import { itemsForVisit, knownComplaintTerms, previousVisit, saveVisit } from './visitRepo'
 import { completeAppointmentForVisit } from '../appointments/appointmentRepo'
 import { DispenseField } from '../stock/DispenseField'
 import { VisitAttachments } from '../attachments/VisitAttachments'
@@ -41,12 +41,14 @@ function VisitFormInner() {
   const navigate = useNavigate()
   const patient = useLiveQuery(async () => db.patients.get(patientId), [patientId])
   const remedies = useLiveQuery(remedyMap)
+  const known = useLiveQuery(knownComplaintTerms)
 
   const [loaded, setLoaded] = useState<Visit | null | undefined>(visitId ? undefined : null)
   const [date, setDate] = useState(todayISO())
   const [notes, setNotes] = useState<TextNotes>({})
-  const [complaints, setComplaints] = useState<string[]>([''])
-  const [checklist, setChecklist] = useState<GeneralsChecklist>({})
+  const [cards, setCards] = useState<ComplaintDetail[]>([{}])
+  // A new visit starts with the generals at Normal; an edited one shows what was saved.
+  const [checklist, setChecklist] = useState<GeneralsChecklist>(() => (visitId ? {} : defaultGenerals()))
   // Progress of the previous visit's complaints, keyed by lowercased complaint.
   const [statuses, setStatuses] = useState<Record<string, ComplaintStatusValue | undefined>>({})
   const [tab, setTab] = useState<NoteKey>('complaint')
@@ -74,16 +76,16 @@ function VisitFormInner() {
       setDate(v.date)
       const { history, mentals, generals, modalities, constitution } = v.caseNotes ?? {}
       setNotes({ history, mentals, generals, modalities, constitution })
-      const lines = complaintLines(v.caseNotes)
-      setComplaints(lines.length ? lines : [''])
+      const saved = detailsFromNotes(v.caseNotes)
+      setCards(saved.length ? saved : [{}])
       setChecklist(v.caseNotes?.generalsChecklist ?? {})
       setStatuses(Object.fromEntries((v.caseNotes?.complaintStatus ?? []).map((s) => [s.complaint.toLowerCase(), s.status])))
       setAdvice(v.advice ?? '')
       setFollowUp(v.followUpDate ?? '')
       setRows(items.length ? rowsFromItems(items, true) : [blankRow()])
-      const saved = new Map<string, number>()
-      for (const i of items) if (i.stockItemId && i.qtyDispensed) saved.set(i.stockItemId, (saved.get(i.stockItemId) ?? 0) + i.qtyDispensed)
-      setSavedDispense(saved)
+      const dispensed = new Map<string, number>()
+      for (const i of items) if (i.stockItemId && i.qtyDispensed) dispensed.set(i.stockItemId, (dispensed.get(i.stockItemId) ?? 0) + i.qtyDispensed)
+      setSavedDispense(dispensed)
       setLoaded(v)
     })()
     return () => {
@@ -107,10 +109,11 @@ function VisitFormInner() {
     for (const s of loaded?.caseNotes.complaintStatus ?? []) if (!known.has(s.complaint.toLowerCase())) list.push(s.complaint)
     return list
   })()
-  const lines = normaliseComplaints(complaints)
+  const details = cleanDetails(cards)
+  const lines = details.map(complaintSummary)
   const caseNotes: CaseNotes = {
     ...Object.fromEntries(Object.entries(notes).filter(([, v]) => v?.trim())),
-    ...(lines.length && { complaint: lines.join('\n'), complaints: lines }),
+    ...(lines.length && { complaint: lines.join('\n'), complaints: lines, complaintDetails: details }),
     generalsChecklist: cleanChecklist(checklist),
     complaintStatus: cleanStatuses(asked, statuses),
   }
@@ -226,7 +229,7 @@ function VisitFormInner() {
         </div>
         <div role="tabpanel" id="case-panel" aria-labelledby={`tab-${tab}`}>
           {tab === 'complaint' ? (
-            <ComplaintLines lines={complaints} onChange={setComplaints} />
+            <ComplaintCards cards={cards} known={known} onChange={setCards} />
           ) : (
             <>
               {tab === 'generals' && <GeneralsChecklistFields value={checklist} onChange={setChecklist} />}

@@ -44,9 +44,22 @@ export interface ComplaintStatus {
   status: ComplaintStatusValue
 }
 
+// One complaint in classical form. Every field is optional; `note` holds the
+// text of complaints recorded as a single line before this structure existed.
+export interface ComplaintDetail {
+  location?: string
+  sensation?: string
+  duration?: string // duration / onset
+  worse?: string // modalities, comma-separated
+  better?: string
+  concomitants?: string
+  note?: string
+}
+
 export interface CaseNotes {
   complaint?: string // complaints joined with newlines; kept for print, certificates and reports
-  complaints?: string[] // absent on records created before the list existed
+  complaints?: string[] // one summary line per complaint; absent on records created before the list existed
+  complaintDetails?: ComplaintDetail[] // absent on records created before the cards existed
   complaintStatus?: ComplaintStatus[] // progress of the previous visit's complaints
   generalsChecklist?: GeneralsChecklist
   history?: string

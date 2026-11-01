@@ -10,9 +10,9 @@
 
 ## Case notes
 
-- **Complaints**: write one complaint per line. Press **+** (or Enter) to add another line and **×** to remove one.
+- **Complaints**: each complaint is a card with **Location** (e.g. head, right temple), **Sensation**, **Duration** (duration or onset), **Worse (<)** and **Better (>)** modalities, **Concomitants** and **Other notes**. All fields are optional. Press **+ Add complaint** for another card and **×** to remove one. For Worse and Better, type free text or tap the quick picks (Morning, Cold, Open air, Motion and so on) to add a term; tap it again to remove it. Terms you used in earlier visits are suggested as you type. Each card is also saved as one summary line, such as "Head, right temple: throbbing; since 3 months; < sun, noise; with nausea", which is what appears on prescriptions, certificates, reports and the visit history. Complaints saved as plain lines before the cards existed open with the line in **Other notes**.
 - **Previous complaints**: on a follow-up visit, the previous visit's complaints are listed with **Persists / Better / Worsened / Resolved**. Complaints not marked Resolved carry forward to the next follow-up. The statuses appear in the patient's visit history.
-- **Generals**: pick Appetite, Thirst, Urine (several allowed), Sleep, Stool (with days between stools for constipation) and Sweat (with the body part when increased). Click a selected option again to clear it. Anything else goes in **Other generals**. These are kept in the record and are not printed on the prescription.
+- **Generals**: a new visit starts with every row set to Normal (Appetite, Thirst, Urine, Sweat Normal; Sleep Sound; Stool Regular), so tap only what differs. An existing visit shows what was saved. Pick Appetite, Thirst, Urine (several allowed), Sleep, Stool (with days between stools for constipation) and Sweat (with the body part when increased). Click a selected option again to clear it. Anything else goes in **Other generals**. These are kept in the record and are not printed on the prescription.
 
 ## Patient page
 
