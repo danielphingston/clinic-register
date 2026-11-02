@@ -44,16 +44,13 @@ export interface ComplaintStatus {
   status: ComplaintStatusValue
 }
 
-// One complaint in classical form. Every field is optional; `note` holds the
-// text of complaints recorded as a single line before this structure existed.
+// One complaint card. Every field is optional; old single-line complaints
+// become cards with only `complaint` set.
 export interface ComplaintDetail {
-  location?: string
-  sensation?: string
+  complaint?: string
   duration?: string // duration / onset
-  worse?: string // modalities, comma-separated
-  better?: string
-  concomitants?: string
-  note?: string
+  aggravation?: string[] // modalities that make it worse (<)
+  amelioration?: string[] // modalities that make it better (>)
 }
 
 export interface CaseNotes {
@@ -65,7 +62,7 @@ export interface CaseNotes {
   history?: string
   mentals?: string
   generals?: string
-  modalities?: string
+  modalities?: string // old free-text tab; no longer shown on new visits, kept on old ones
   constitution?: string
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checklistSummary, cleanChecklist, cleanDetail, cleanDetails, cleanStatuses, complaintLines, complaintSummary, defaultGenerals, detailsFromNotes, hasTerm, toggleTerm, normaliseComplaints, previousComplaints, statusSummary } from './caseNotes'
+import { addTerm, checklistSummary, cleanChecklist, cleanDetail, cleanDetails, cleanEntries, cleanStatuses, complaintLines, complaintSummary, defaultGenerals, detailsFromNotes, hasTerm, toggleTerm, normaliseComplaints, previousComplaints, statusSummary } from './caseNotes'
 
 describe('complaints', () => {
   it('normalises lines by trimming and dropping blanks', () => {
@@ -53,43 +53,45 @@ describe('generals checklist', () => {
 })
 
 describe('complaint cards', () => {
-  it('trims fields and drops empty ones and empty cards', () => {
-    expect(cleanDetail({ location: ' Head ', sensation: '  ', worse: 'Sun' })).toEqual({ location: 'Head', worse: 'Sun' })
-    expect(cleanDetails([{ location: ' ' }, { sensation: 'Dull' }, {}])).toEqual([{ sensation: 'Dull' }])
+  it('trims fields and entries and drops empty ones and empty cards', () => {
+    expect(cleanDetail({ complaint: ' Head ', duration: '  ', aggravation: [' Sun ', '', 'sun', 'Noise'], amelioration: [' '] })).toEqual({ complaint: 'Head', aggravation: ['Sun', 'Noise'] })
+    expect(cleanDetails([{ complaint: ' ' }, { duration: '2 days' }, { aggravation: [] }, {}])).toEqual([{ duration: '2 days' }])
+    expect(cleanEntries(undefined)).toEqual([])
   })
 
   it('writes a summary line without dangling separators', () => {
     expect(
       complaintSummary({
-        location: 'Head, right temple',
-        sensation: 'Throbbing, bursting',
-        duration: '3 months, after a fall',
-        worse: 'Sun, Noise',
-        better: 'Pressure',
-        concomitants: 'Nausea',
+        complaint: 'Throbbing headache, right temple',
+        duration: '3 months',
+        aggravation: ['Sun', 'Noise', 'Damp weather'],
+        amelioration: ['Pressure'],
       }),
-    ).toBe('Head, right temple: throbbing, bursting; since 3 months, after a fall; < sun, noise; > pressure; with nausea')
-    expect(complaintSummary({ sensation: 'Throbbing', worse: 'Night' })).toBe('Throbbing; < night')
-    expect(complaintSummary({ location: 'Knee' })).toBe('Knee')
-    expect(complaintSummary({ duration: '2 days', concomitants: 'Fever' })).toBe('since 2 days; with fever')
-    expect(complaintSummary({ location: 'Head', note: 'Worse after meals' })).toBe('Head; Worse after meals')
-    expect(complaintSummary({ note: 'Old line' })).toBe('Old line')
+    ).toBe('Throbbing headache, right temple; since 3 months; < sun, noise, damp weather; > pressure')
+    expect(complaintSummary({ complaint: 'Knee pain', aggravation: ['Night'] })).toBe('Knee pain; < night')
+    expect(complaintSummary({ complaint: 'Cough' })).toBe('Cough')
+    expect(complaintSummary({ duration: '2 days', amelioration: ['Rest'] })).toBe('since 2 days; > rest')
+    expect(complaintSummary({ complaint: 'Fever', aggravation: ['AC room'] })).toBe('Fever; < AC room')
     expect(complaintSummary({})).toBe('')
   })
 
-  it('turns old complaint lines into note cards', () => {
-    expect(detailsFromNotes({ complaints: ['Headache', 'Cough'] })).toEqual([{ note: 'Headache' }, { note: 'Cough' }])
-    expect(detailsFromNotes({ complaint: 'Cold\nFever' })).toEqual([{ note: 'Cold' }, { note: 'Fever' }])
-    expect(detailsFromNotes({ complaintDetails: [{ location: 'Knee' }], complaints: ['Knee'] })).toEqual([{ location: 'Knee' }])
+  it('turns old complaint lines into cards', () => {
+    expect(detailsFromNotes({ complaints: ['Headache', 'Cough'] })).toEqual([{ complaint: 'Headache' }, { complaint: 'Cough' }])
+    expect(detailsFromNotes({ complaint: 'Cold\nFever' })).toEqual([{ complaint: 'Cold' }, { complaint: 'Fever' }])
+    expect(detailsFromNotes({ complaintDetails: [{ complaint: 'Knee' }], complaints: ['Knee'] })).toEqual([{ complaint: 'Knee' }])
     expect(detailsFromNotes(undefined)).toEqual([])
   })
 
-  it('toggles comma-separated terms case-insensitively', () => {
-    expect(toggleTerm('', 'Sun')).toBe('Sun')
-    expect(toggleTerm('Sun', 'Noise')).toBe('Sun, Noise')
-    expect(toggleTerm('sun, Noise', 'Sun')).toBe('Noise')
-    expect(hasTerm('Cold, damp weather', 'Damp weather')).toBe(true)
-    expect(hasTerm('Cold', 'Col')).toBe(false)
+  it('adds and toggles entries case-insensitively', () => {
+    expect(addTerm(undefined, ' Sun ')).toEqual(['Sun'])
+    expect(addTerm(['Sun'], 'sun')).toEqual(['Sun'])
+    expect(addTerm(['Sun'], '  ')).toEqual(['Sun'])
+    expect(toggleTerm([], 'Sun')).toEqual(['Sun'])
+    expect(toggleTerm(['Sun'], 'Noise')).toEqual(['Sun', 'Noise'])
+    expect(toggleTerm(['sun', 'Noise'], 'Sun')).toEqual(['Noise'])
+    expect(hasTerm(['Cold', 'damp weather'], 'Damp weather')).toBe(true)
+    expect(hasTerm(['Cold'], 'Col')).toBe(false)
+    expect(hasTerm(undefined, 'Cold')).toBe(false)
   })
 })
 

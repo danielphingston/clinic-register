@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ComplaintDetail, ComplaintStatusValue, GeneralsChecklist } from '../../db/types'
-import { hasTerm, LEVELS, MODALITY_QUICK_PICKS, SLEEP_OPTIONS, STATUS_OPTIONS, STOOL_OPTIONS, toggleTerm, URINE_OPTIONS } from './caseNotes'
+import { addTerm, hasTerm, LEVELS, MODALITY_QUICK_PICKS, SLEEP_OPTIONS, STATUS_OPTIONS, STOOL_OPTIONS, toggleTerm, URINE_OPTIONS } from './caseNotes'
 import type { TermField } from './visitRepo'
 
 function Pill({ pressed, onClick, children }: { pressed: boolean; onClick: () => void; children: string }) {
@@ -90,28 +90,61 @@ export function GeneralsChecklistFields({ value, onChange }: { value: GeneralsCh
   )
 }
 
-const TERM_FIELDS: { key: TermField; label: string; placeholder: string }[] = [
-  { key: 'location', label: 'Location', placeholder: 'e.g. Head, right temple, extending to eye' },
-  { key: 'sensation', label: 'Sensation', placeholder: 'e.g. Throbbing, bursting' },
-  { key: 'duration', label: 'Duration', placeholder: 'e.g. 3 months, after a fall' },
-]
+const TERM_FIELDS: TermField[] = ['complaint', 'duration', 'aggravation', 'amelioration']
 
-// Modality input with quick chips that add or remove a term in the text.
-function Modality({ n, field, title, sign, value, onChange }: { n: number; field: string; title: string; sign: string; value?: string; onChange: (v: string) => void }) {
+// Removable chips, an add box (Enter, "Add" or leaving the box) and quick chips that toggle an entry.
+function Modality({ n, field, title, sign, value, onChange }: { n: number; field: 'aggravation' | 'amelioration'; title: string; sign: string; value?: string[]; onChange: (v: string[]) => void }) {
+  const [draft, setDraft] = useState('')
+  const entries = value ?? []
+  const commit = () => {
+    if (draft.trim()) onChange(addTerm(entries, draft))
+    setDraft('')
+  }
   return (
-    <div>
+    <div role="group" aria-label={`${title} ${n}`}>
       <label className="label" htmlFor={`c${n}-${field}`}>
         {title} ({sign})
       </label>
-      <input id={`c${n}-${field}`} className="input" aria-label={`${title} ${n}`} value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
+      {entries.length > 0 && (
+        <ul className="mb-1.5 flex flex-wrap gap-1">
+          {entries.map((t) => (
+            <li key={t.toLowerCase()} className="inline-flex items-center gap-1 rounded-full bg-slate-100 py-0.5 pl-2.5 pr-1 text-sm">
+              {t}
+              <button type="button" className="rounded-full px-1.5 text-slate-500 hover:text-red-700" aria-label={`Remove ${t} from ${title.toLowerCase()} ${n}`} onClick={() => onChange(toggleTerm(entries, t))}>
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex gap-2">
+        <input
+          id={`c${n}-${field}`}
+          className="input"
+          aria-label={`${title} ${n}`}
+          placeholder="Type and press Enter"
+          list={`known-${field}`}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return
+            e.preventDefault()
+            commit()
+          }}
+          onBlur={commit}
+        />
+        <button type="button" className="btn-ghost border border-slate-300 px-3 py-1" aria-label={`Add ${field} ${n}`} onClick={commit}>
+          Add
+        </button>
+      </div>
       <div role="group" aria-label={`${title} ${n} quick picks`} className="mt-1.5 flex flex-wrap gap-1">
         {MODALITY_QUICK_PICKS.map((t) => (
           <button
             key={t}
             type="button"
-            aria-pressed={hasTerm(value, t)}
-            onClick={() => onChange(toggleTerm(value, t))}
-            className={`rounded-full border px-2 py-0.5 text-xs ${hasTerm(value, t) ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-100'}`}
+            aria-pressed={hasTerm(entries, t)}
+            onClick={() => onChange(toggleTerm(entries, t))}
+            className={`rounded-full border px-2 py-0.5 text-xs ${hasTerm(entries, t) ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-100'}`}
           >
             {t}
           </button>
@@ -121,26 +154,26 @@ function Modality({ n, field, title, sign, value, onChange }: { n: number; field
   )
 }
 
-// One card per complaint: location, sensation, duration, modalities, concomitants.
+// One card per complaint: the complaint, its duration, and what aggravates and ameliorates it.
 export function ComplaintCards({ cards, known, onChange }: { cards: ComplaintDetail[]; known?: Record<TermField, string[]>; onChange: (cards: ComplaintDetail[]) => void }) {
   const focus = useRef<number | null>(null)
   useEffect(() => {
     if (focus.current === null) return
-    document.querySelector<HTMLInputElement>(`[aria-label="Location ${focus.current + 1}"]`)?.focus()
+    document.querySelector<HTMLInputElement>(`[aria-label="Complaint ${focus.current + 1}"]`)?.focus()
     focus.current = null
   }, [cards.length])
   const set = (i: number, changes: ComplaintDetail) => onChange(cards.map((c, j) => (j === i ? { ...c, ...changes } : c)))
   return (
     <div className="space-y-3">
       {TERM_FIELDS.map((f) => (
-        <datalist key={f.key} id={`known-${f.key}`}>
-          {(known?.[f.key] ?? []).map((t) => (
+        <datalist key={f} id={`known-${f}`}>
+          {(known?.[f] ?? []).map((t) => (
             <option key={t} value={t} />
           ))}
         </datalist>
       ))}
       {cards.map((c, i) => (
-        <div key={i} role="group" aria-label={`Complaint ${i + 1}`} className="rounded-md border border-slate-200 p-3">
+        <div key={i} role="group" aria-label={`Complaint card ${i + 1}`} className="rounded-md border border-slate-200 p-3">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-700">Complaint {i + 1}</span>
             <button
@@ -154,44 +187,36 @@ export function ComplaintCards({ cards, known, onChange }: { cards: ComplaintDet
             </button>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            {TERM_FIELDS.map((f) => (
-              <div key={f.key} className={f.key === 'location' ? 'sm:col-span-2' : ''}>
-                <label className="label" htmlFor={`c${i + 1}-${f.key}`}>
-                  {f.label}
-                </label>
-                <input
-                  id={`c${i + 1}-${f.key}`}
-                  className="input"
-                  aria-label={`${f.label} ${i + 1}`}
-                  placeholder={f.placeholder}
-                  list={`known-${f.key}`}
-                  value={c[f.key] ?? ''}
-                  onChange={(e) => set(i, { [f.key]: e.target.value })}
-                />
-              </div>
-            ))}
-            <Modality n={i + 1} field="worse" title="Worse" sign="<" value={c.worse} onChange={(worse) => set(i, { worse })} />
-            <Modality n={i + 1} field="better" title="Better" sign=">" value={c.better} onChange={(better) => set(i, { better })} />
-            <div>
-              <label className="label" htmlFor={`c${i + 1}-concomitants`}>
-                Concomitants
+            <div className="sm:col-span-2">
+              <label className="label" htmlFor={`c${i + 1}-complaint`}>
+                Complaint
               </label>
               <input
-                id={`c${i + 1}-concomitants`}
+                id={`c${i + 1}-complaint`}
                 className="input"
-                aria-label={`Concomitants ${i + 1}`}
-                placeholder="e.g. Nausea, photophobia"
-                list="known-concomitants"
-                value={c.concomitants ?? ''}
-                onChange={(e) => set(i, { concomitants: e.target.value })}
+                aria-label={`Complaint ${i + 1}`}
+                placeholder="e.g. Throbbing headache, right temple"
+                list="known-complaint"
+                value={c.complaint ?? ''}
+                onChange={(e) => set(i, { complaint: e.target.value })}
               />
             </div>
-            <div>
-              <label className="label" htmlFor={`c${i + 1}-note`}>
-                Other notes
+            <div className="sm:col-span-2">
+              <label className="label" htmlFor={`c${i + 1}-duration`}>
+                Duration
               </label>
-              <input id={`c${i + 1}-note`} className="input" aria-label={`Other notes ${i + 1}`} value={c.note ?? ''} onChange={(e) => set(i, { note: e.target.value })} />
+              <input
+                id={`c${i + 1}-duration`}
+                className="input"
+                aria-label={`Duration ${i + 1}`}
+                placeholder="e.g. 3 months"
+                list="known-duration"
+                value={c.duration ?? ''}
+                onChange={(e) => set(i, { duration: e.target.value })}
+              />
             </div>
+            <Modality n={i + 1} field="aggravation" title="Aggravation" sign="<" value={c.aggravation} onChange={(aggravation) => set(i, { aggravation })} />
+            <Modality n={i + 1} field="amelioration" title="Amelioration" sign=">" value={c.amelioration} onChange={(amelioration) => set(i, { amelioration })} />
           </div>
         </div>
       ))}

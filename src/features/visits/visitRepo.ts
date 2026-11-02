@@ -1,6 +1,6 @@
 import { db } from '../../db/db'
 import { insert, softDelete, update } from '../../db/repo'
-import type { CaseNotes, ComplaintDetail, Patient, PrescriptionItem, Visit } from '../../db/types'
+import type { CaseNotes, Patient, PrescriptionItem, Visit } from '../../db/types'
 import { roundQty } from '../stock/stockLogic'
 import { syncDispense } from '../stock/stockRepo'
 
@@ -91,21 +91,23 @@ export async function visitsForPatient(patientId: string): Promise<Visit[]> {
   return rows.sort(byDateThenCreated).reverse()
 }
 
-// Terms used before in each free-text complaint field, for suggestions.
-export type TermField = 'location' | 'sensation' | 'duration' | 'concomitants'
+// Terms used before in the complaint cards, for suggestions.
+export type TermField = 'complaint' | 'duration' | 'aggravation' | 'amelioration'
 
 export async function knownComplaintTerms(): Promise<Record<TermField, string[]>> {
   const rows = await db.visits.where('deleted').equals(0).toArray()
   const details = rows.flatMap((v) => v.caseNotes?.complaintDetails ?? [])
-  const collect = (f: keyof ComplaintDetail) => {
+  const collect = (f: TermField) => {
     const seen = new Map<string, string>()
     for (const d of details) {
-      const t = d[f]?.trim()
-      if (t && !seen.has(t.toLowerCase())) seen.set(t.toLowerCase(), t)
+      for (const raw of [d[f]].flat()) {
+        const t = raw?.trim()
+        if (t && !seen.has(t.toLowerCase())) seen.set(t.toLowerCase(), t)
+      }
     }
     return [...seen.values()].sort((a, b) => a.localeCompare(b))
   }
-  return { location: collect('location'), sensation: collect('sensation'), duration: collect('duration'), concomitants: collect('concomitants') }
+  return { complaint: collect('complaint'), duration: collect('duration'), aggravation: collect('aggravation'), amelioration: collect('amelioration') }
 }
 
 // Items saved in one transaction can share a createdAt, so `order` decides.

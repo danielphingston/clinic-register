@@ -18,15 +18,15 @@ import { DispenseField } from '../stock/DispenseField'
 import { VisitAttachments } from '../attachments/VisitAttachments'
 
 // The free-text tabs; complaints and the generals checklist are structured fields beside them.
-type NoteKey = 'complaint' | 'history' | 'mentals' | 'generals' | 'modalities' | 'constitution'
-type TextNotes = Pick<CaseNotes, NoteKey>
+type NoteKey = 'complaint' | 'history' | 'mentals' | 'generals' | 'constitution'
+// `modalities` is the old free-text tab: kept on old visits, never offered on new ones.
+type TextNotes = Pick<CaseNotes, NoteKey | 'modalities'>
 
 const TABS: { key: NoteKey; label: string }[] = [
   { key: 'complaint', label: 'Complaint' },
   { key: 'history', label: 'History' },
   { key: 'mentals', label: 'Mentals' },
   { key: 'generals', label: 'Generals' },
-  { key: 'modalities', label: 'Modalities' },
   { key: 'constitution', label: 'Constitution' },
 ]
 
@@ -229,7 +229,17 @@ function VisitFormInner() {
         </div>
         <div role="tabpanel" id="case-panel" aria-labelledby={`tab-${tab}`}>
           {tab === 'complaint' ? (
-            <ComplaintCards cards={cards} known={known} onChange={setCards} />
+            <>
+              <ComplaintCards cards={cards} known={known} onChange={setCards} />
+              {loaded?.caseNotes.modalities?.trim() && (
+                <div className="mt-3">
+                  <label className="label" htmlFor="old-modalities">
+                    Modalities (old notes)
+                  </label>
+                  <textarea id="old-modalities" className="input" rows={3} value={notes.modalities ?? ''} onChange={(e) => setNotes((n) => ({ ...n, modalities: e.target.value }))} />
+                </div>
+              )}
+            </>
           ) : (
             <>
               {tab === 'generals' && <GeneralsChecklistFields value={checklist} onChange={setChecklist} />}

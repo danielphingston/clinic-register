@@ -33,10 +33,8 @@ export const STATUS_OPTIONS: { value: ComplaintStatusValue; label: string }[] = 
   { value: 'resolved', label: 'Resolved' },
 ]
 
-// Tap-to-pick terms for the Worse (<) and Better (>) modalities.
+// Tap-to-pick terms for Aggravation (<) and Amelioration (>).
 export const MODALITY_QUICK_PICKS = ['Morning', 'Evening', 'Night', 'Cold', 'Heat', 'Damp weather', 'Open air', 'Motion', 'Rest', 'Lying down', 'Pressure', 'Touch', 'Eating', 'Sun', 'Noise']
-
-export const DETAIL_FIELDS = ['location', 'sensation', 'duration', 'worse', 'better', 'concomitants', 'note'] as const
 
 const label = (opts: readonly { value: string; label: string }[], v: string) => opts.find((o) => o.value === v)?.label ?? v
 
@@ -121,25 +119,36 @@ export function defaultGenerals(): GeneralsChecklist {
   return { appetite: 'normal', thirst: 'normal', urine: ['normal'], sleep: 'sound', stool: 'regular', sweat: 'normal' }
 }
 
-const terms = (text: string | undefined) => (text ?? '').split(',').map((t) => t.trim()).filter(Boolean)
-
-export function hasTerm(text: string | undefined, term: string): boolean {
-  return terms(text).some((t) => t.toLowerCase() === term.toLowerCase())
+// Trimmed entries without blanks or case-insensitive duplicates (first spelling wins).
+export function cleanEntries(list: string[] | undefined): string[] {
+  return dedupe(normaliseComplaints(list ?? []))
 }
 
-// Adds the term to a comma-separated field, or removes it when already there.
-export function toggleTerm(text: string | undefined, term: string): string {
-  const list = terms(text)
-  return (hasTerm(text, term) ? list.filter((t) => t.toLowerCase() !== term.toLowerCase()) : [...list, term]).join(', ')
+export function hasTerm(list: string[] | undefined, term: string): boolean {
+  return (list ?? []).some((t) => t.trim().toLowerCase() === term.trim().toLowerCase())
 }
 
-// Trimmed fields; empty ones are dropped.
+// Appends an entry unless it is blank or already there.
+export function addTerm(list: string[] | undefined, term: string): string[] {
+  return cleanEntries([...(list ?? []), term])
+}
+
+// Adds the term to the list, or removes it when already there.
+export function toggleTerm(list: string[] | undefined, term: string): string[] {
+  return hasTerm(list, term) ? (list ?? []).filter((t) => t.trim().toLowerCase() !== term.trim().toLowerCase()) : addTerm(list, term)
+}
+
+// Trimmed fields and entries; empty ones are dropped.
 export function cleanDetail(d: ComplaintDetail): ComplaintDetail {
   const out: ComplaintDetail = {}
-  for (const k of DETAIL_FIELDS) {
-    const v = d[k]?.trim()
-    if (v) out[k] = v
-  }
+  const complaint = d.complaint?.trim()
+  const duration = d.duration?.trim()
+  const aggravation = cleanEntries(d.aggravation)
+  const amelioration = cleanEntries(d.amelioration)
+  if (complaint) out.complaint = complaint
+  if (duration) out.duration = duration
+  if (aggravation.length) out.aggravation = aggravation
+  if (amelioration.length) out.amelioration = amelioration
   return out
 }
 
@@ -148,29 +157,25 @@ export function cleanDetails(list: ComplaintDetail[]): ComplaintDetail[] {
   return list.map(cleanDetail).filter((d) => Object.keys(d).length > 0)
 }
 
-// Lower-cases the start of each comma-separated term so a phrase reads
-// mid-sentence ("Throbbing, Bursting" -> "throbbing, bursting"); acronyms stay.
-const lowerTerms = (text: string) => terms(text).map((t) => (/^[A-Z][^A-Z]/.test(t) || t.length === 1 ? t[0].toLowerCase() + t.slice(1) : t)).join(', ')
+// Lower-cases the start of a modality term so it reads mid-sentence
+// ("Damp weather" -> "damp weather"); acronyms stay.
+const lowerTerm = (t: string) => (/^[A-Z][^A-Z]/.test(t) || t.length === 1 ? t[0].toLowerCase() + t.slice(1) : t)
 
-// "Head, right temple: throbbing, bursting; since 3 months; < sun; > pressure; with nausea"
+// "Throbbing headache, right temple; since 3 months; < sun, noise; > pressure"
 export function complaintSummary(d: ComplaintDetail): string {
   const c = cleanDetail(d)
-  const sensation = c.sensation && (c.location ? lowerTerms(c.sensation) : c.sensation)
-  const head = c.location && sensation ? `${c.location}: ${sensation}` : (c.location ?? sensation)
   return [
-    head,
-    c.duration && `since ${lowerTerms(c.duration)}`,
-    c.worse && `< ${lowerTerms(c.worse)}`,
-    c.better && `> ${lowerTerms(c.better)}`,
-    c.concomitants && `with ${lowerTerms(c.concomitants)}`,
-    c.note,
+    c.complaint,
+    c.duration && `since ${c.duration}`,
+    c.aggravation && `< ${c.aggravation.map(lowerTerm).join(', ')}`,
+    c.amelioration && `> ${c.amelioration.map(lowerTerm).join(', ')}`,
   ]
     .filter(Boolean)
     .join('; ')
 }
 
-// The cards of a visit: the saved ones, else each old complaint line as a note.
+// The cards of a visit: the saved ones, else each old complaint line as a card.
 export function detailsFromNotes(notes: CaseNotes | undefined): ComplaintDetail[] {
   if (notes?.complaintDetails?.length) return notes.complaintDetails
-  return complaintLines(notes).map((note) => ({ note }))
+  return complaintLines(notes).map((complaint) => ({ complaint }))
 }
