@@ -12,7 +12,7 @@ import { POTENCY_PRESETS, REPETITION_PRESETS, rxDetails } from './rxFormat'
 import { blankRow, repeatRows, rowsFromItems, rowsToInput, type RxRow } from './rxRows'
 import { cleanChecklist, cleanDetails, cleanStatuses, complaintSummary, defaultGenerals, detailsFromNotes, previousComplaints } from './caseNotes'
 import { ComplaintCards, ComplaintStatusRows, GeneralsChecklistFields } from './CaseNoteFields'
-import { itemsForVisit, knownComplaintTerms, previousVisit, saveVisit } from './visitRepo'
+import { deleteVisit, itemsForVisit, knownComplaintTerms, previousVisit, saveVisit, visitDeleteBlockers, VisitDeleteError, type VisitDeleteBlocker } from './visitRepo'
 import { completeAppointmentForVisit } from '../appointments/appointmentRepo'
 import { DispenseField } from '../stock/DispenseField'
 import { VisitAttachments } from '../attachments/VisitAttachments'
@@ -57,6 +57,8 @@ function VisitFormInner() {
   const [rows, setRows] = useState<RxRow[]>(() => [blankRow()])
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  // Delete dialog: the blockers (none = ready to confirm), or null when closed.
+  const [deleting, setDeleting] = useState<VisitDeleteBlocker[] | null>(null)
   // Stock already deducted by this visit's saved rows, per stock item.
   const [savedDispense, setSavedDispense] = useState<Map<string, number>>(() => new Map())
 
@@ -184,6 +186,24 @@ function VisitFormInner() {
     } catch (err) {
       setError((err as Error).message)
       setSaving(false)
+    }
+  }
+
+  async function askDelete() {
+    setDeleting(await visitDeleteBlockers(loaded!.id))
+  }
+
+  async function confirmDelete() {
+    try {
+      await deleteVisit(loaded!.id)
+      leaving.current = true
+      navigate(`/patients/${patientId}`, { replace: true })
+    } catch (err) {
+      if (err instanceof VisitDeleteError) setDeleting(err.blockers)
+      else {
+        setDeleting(null)
+        setError((err as Error).message)
+      }
     }
   }
 
@@ -465,7 +485,55 @@ function VisitFormInner() {
         <Link to={`/patients/${patient.id}`} className="btn-ghost border border-slate-300">
           Cancel
         </Link>
+        {loaded && (
+          <button type="button" className="btn-ghost ml-auto border border-red-300 text-red-700" disabled={saving} onClick={askDelete}>
+            Delete visit
+          </button>
+        )}
       </div>
+      {deleting && loaded && (
+        <Modal title={deleting.length ? 'Cannot delete this visit' : 'Delete visit?'} onClose={() => setDeleting(null)}>
+          {deleting.length ? (
+            <>
+              <p className="text-sm text-slate-600">This visit has records that depend on it:</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                {deleting.map((b) => (
+                  <li key={b.reason}>
+                    {b.reason}
+                    {b.to && !b.to.endsWith(`/visits/${loaded.id}`) && (
+                      <>
+                        {' '}
+                        <Link to={b.to} className="font-medium text-brand-700 underline">
+                          Open
+                        </Link>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-4">
+                <button type="button" className="btn-primary" data-autofocus onClick={() => setDeleting(null)}>
+                  OK
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-slate-600">
+                Delete this visit from {formatDate(loaded.date)}? Its prescription will be removed and dispensed medicines returned to stock.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button type="button" className="btn-ghost border border-slate-300" data-autofocus onClick={() => setDeleting(null)}>
+                  Keep visit
+                </button>
+                <button type="button" className="btn-primary bg-red-700 hover:bg-red-800" onClick={confirmDelete}>
+                  Delete visit
+                </button>
+              </div>
+            </>
+          )}
+        </Modal>
+      )}
       {blocker.state === 'blocked' && (
         <Modal title="Leave without saving?" onClose={() => blocker.reset()}>
           <p className="text-sm text-slate-600">This visit has changes that are not saved yet. If you leave now, they will be lost.</p>
