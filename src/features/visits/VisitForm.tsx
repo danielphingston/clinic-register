@@ -19,7 +19,7 @@ import { VisitAttachments } from '../attachments/VisitAttachments'
 
 // The free-text tabs; complaints and the generals checklist are structured fields beside them.
 type NoteKey = 'complaint' | 'history' | 'mentals' | 'generals' | 'modalities' | 'constitution'
-type TextNotes = Pick<CaseNotes, NoteKey>
+type TextNotes = Pick<CaseNotes, NoteKey | 'familyHistory'>
 
 const TABS: { key: NoteKey; label: string }[] = [
   { key: 'complaint', label: 'Complaint' },
@@ -72,8 +72,8 @@ function VisitFormInner() {
       const items = await itemsForVisit(v.id)
       if (cancelled) return
       setDate(v.date)
-      const { history, mentals, generals, modalities, constitution } = v.caseNotes ?? {}
-      setNotes({ history, mentals, generals, modalities, constitution })
+      const { history, familyHistory, mentals, generals, modalities, constitution } = v.caseNotes ?? {}
+      setNotes({ history, familyHistory, mentals, generals, modalities, constitution })
       const lines = complaintLines(v.caseNotes)
       setComplaints(lines.length ? lines : [''])
       setChecklist(v.caseNotes?.generalsChecklist ?? {})
@@ -220,13 +220,30 @@ function VisitFormInner() {
               }`}
             >
               {t.label}
-              {(t.key === 'complaint' ? lines.length > 0 : notes[t.key]?.trim()) && tab !== t.key && <span className="ml-1 text-brand-600">•</span>}
+              {(t.key === 'complaint' ? lines.length > 0 : t.key === 'history' ? notes.history?.trim() || notes.familyHistory?.trim() : notes[t.key]?.trim()) && tab !== t.key && <span className="ml-1 text-brand-600">•</span>}
             </button>
           ))}
         </div>
         <div role="tabpanel" id="case-panel" aria-labelledby={`tab-${tab}`}>
           {tab === 'complaint' ? (
             <ComplaintLines lines={complaints} onChange={setComplaints} />
+          ) : tab === 'history' ? (
+            <div className="space-y-3">
+              {(['history', 'familyHistory'] as const).map((k) => (
+                <div key={k}>
+                  <label className="label" htmlFor={`notes-${k}`}>
+                    {k === 'history' ? 'Past history' : 'Family history'}
+                  </label>
+                  <textarea
+                    id={`notes-${k}`}
+                    className="input"
+                    rows={4}
+                    value={notes[k] ?? ''}
+                    onChange={(e) => setNotes((n) => ({ ...n, [k]: e.target.value }))}
+                  />
+                </div>
+              ))}
+            </div>
           ) : (
             <>
               {tab === 'generals' && <GeneralsChecklistFields value={checklist} onChange={setChecklist} />}

@@ -261,6 +261,24 @@ describe('visit UI', () => {
     expect((await screen.findAllByTestId('visit-statuses'))[0]).toHaveTextContent('Headache — Better')
   })
 
+  it('records past and family history separately and reloads them', async () => {
+    const user = userEvent.setup()
+    const p = await createPatient({ name: 'Asha' })
+    open(`/patients/${p.id}/visits/new`)
+    await user.click(await screen.findByRole('tab', { name: 'History' }))
+    await user.type(screen.getByRole('textbox', { name: 'Past history' }), 'Typhoid 2010')
+    await user.type(screen.getByRole('textbox', { name: 'Family history' }), 'Father: diabetes')
+    await user.click(screen.getByRole('button', { name: 'Save visit' }))
+
+    await screen.findByTestId('visit')
+    const [v] = await visitsForPatient(p.id)
+    expect(v.caseNotes).toMatchObject({ history: 'Typhoid 2010', familyHistory: 'Father: diabetes' })
+    open(`/patients/${p.id}/visits/${v.id}`)
+    await user.click(await screen.findByRole('tab', { name: /History/ }))
+    expect(await screen.findByRole('textbox', { name: 'Past history' })).toHaveValue('Typhoid 2010')
+    expect(screen.getByRole('textbox', { name: 'Family history' })).toHaveValue('Father: diabetes')
+  })
+
   it('asks before leaving a visit with unsaved changes', async () => {
     const user = userEvent.setup()
     const p = await createPatient({ name: 'Asha' })

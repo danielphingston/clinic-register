@@ -11,6 +11,7 @@
 ## Case notes
 
 - **Complaints**: write one complaint per line. Press **+** (or Enter) to add another line and **×** to remove one.
+- **History**: the History tab has separate **Past history** and **Family history** boxes. History written before the split appears under Past history.
 - **Previous complaints**: on a follow-up visit, the previous visit's complaints are listed with **Persists / Better / Worsened / Resolved**. Complaints not marked Resolved carry forward to the next follow-up. The statuses appear in the patient's visit history.
 - **Generals**: pick Appetite, Thirst, Urine (several allowed), Sleep, Stool (with days between stools for constipation) and Sweat (with the body part when increased). Click a selected option again to clear it. Anything else goes in **Other generals**. These are kept in the record and are not printed on the prescription.
 

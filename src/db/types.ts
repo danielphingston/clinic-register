@@ -49,7 +49,8 @@ export interface CaseNotes {
   complaints?: string[] // absent on records created before the list existed
   complaintStatus?: ComplaintStatus[] // progress of the previous visit's complaints
   generalsChecklist?: GeneralsChecklist
-  history?: string
+  history?: string // shown as "Past history"
+  familyHistory?: string
   mentals?: string
   generals?: string
   modalities?: string
