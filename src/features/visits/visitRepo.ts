@@ -1,5 +1,6 @@
 import { db } from '../../db/db'
 import { insert, softDelete, update } from '../../db/repo'
+import { formatDate, todayISO } from '../../lib/format'
 import type { CaseNotes, Patient, PrescriptionItem, Visit } from '../../db/types'
 import { roundQty } from '../stock/stockLogic'
 import { syncDispense } from '../stock/stockRepo'
@@ -79,6 +80,59 @@ export async function saveVisit(input: VisitInput): Promise<string> {
       await syncDispense({ id: rxId, remedyId: fields.remedyId, potency: fields.potency }, { stockItemId: fields.stockItemId, qty: fields.qtyDispensed }, input.date)
     }
     return visitId
+  })
+}
+
+export interface VisitDeleteBlocker {
+  reason: string
+  to?: string // where the user can resolve it
+}
+
+export class VisitDeleteError extends Error {
+  blockers: VisitDeleteBlocker[]
+  constructor(blockers: VisitDeleteBlocker[]) {
+    super(blockers.map((b) => b.reason).join(' '))
+    this.blockers = blockers
+  }
+}
+
+// Why a visit can't be deleted yet. Voided bills and cancelled certificates
+// are tombstones, so they don't block. Appointments don't reference visits.
+export async function visitDeleteBlockers(visitId: string): Promise<VisitDeleteBlocker[]> {
+  const visit = await db.visits.get(visitId)
+  if (!visit || visit.deleted) return []
+  const out: VisitDeleteBlocker[] = []
+  const profile = `/patients/${visit.patientId}`
+
+  // The latest later visit is the one to delete first.
+  const later = (await visitsForPatient(visit.patientId)).find((v) => v.id !== visit.id && byDateThenCreated(v, visit) > 0)
+  if (later) out.push({ reason: `Has a follow-up visit on ${formatDate(later.date)}. Delete that visit first.`, to: `${profile}/visits/${later.id}` })
+
+  const bills = await db.bills.where('visitId').equals(visitId).filter((b) => b.deleted === 0).toArray()
+  for (const b of bills) out.push({ reason: `Linked to bill ${b.billNo} — void it first.`, to: profile })
+
+  const certs = await db.certificates.where('visitId').equals(visitId).filter((c) => c.deleted === 0).toArray()
+  for (const c of certs) out.push({ reason: `Certificate ${c.certNo} — cancel it first.`, to: profile })
+
+  const files = await db.attachments.where('visitId').equals(visitId).filter((a) => a.deleted === 0).count()
+  if (files > 0) out.push({ reason: `${files} attachment(s) — delete them first.`, to: `${profile}/visits/${visitId}` })
+  return out
+}
+
+// Soft-deletes a visit with its prescription and returns any dispensed stock.
+// Refuses (VisitDeleteError) while follow-ups, bills, certificates or
+// attachments still depend on it.
+export async function deleteVisit(visitId: string): Promise<void> {
+  await db.transaction('rw', [db.visits, db.prescriptionItems, db.stockItems, db.stockMoves, db.bills, db.certificates, db.attachments], async () => {
+    const visit = await db.visits.get(visitId)
+    if (!visit || visit.deleted) throw new Error('Visit not found')
+    const blockers = await visitDeleteBlockers(visitId)
+    if (blockers.length) throw new VisitDeleteError(blockers)
+    for (const item of await itemsForVisit(visitId)) {
+      await softDelete(db.prescriptionItems, item.id)
+      await syncDispense(item, null, todayISO())
+    }
+    await softDelete(db.visits, visitId)
   })
 }
 

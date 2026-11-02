@@ -13,6 +13,7 @@
 - **Complaints**: write one complaint per line. Press **+** (or Enter) to add another line and **×** to remove one.
 - **Previous complaints**: on a follow-up visit, the previous visit's complaints are listed with **Persists / Better / Worsened / Resolved**. Complaints not marked Resolved carry forward to the next follow-up. The statuses appear in the patient's visit history.
 - **Generals**: pick Appetite, Thirst, Urine (several allowed), Sleep, Stool (with days between stools for constipation) and Sweat (with the body part when increased). Click a selected option again to clear it. Anything else goes in **Other generals**. These are kept in the record and are not printed on the prescription.
+- **Deleting a visit**: open the visit and press **Delete visit**. Its prescription is removed and dispensed medicines go back to stock. A visit cannot be deleted while a later follow-up visit, an active bill, a certificate or an attachment still refers to it; the dialog lists what to delete, void or cancel first.
 
 ## Patient page
 
