@@ -256,6 +256,8 @@ export interface ClinicSettings {
   // Absent on data saved before templates existed; getSettings fills the defaults.
   whatsappTemplates?: WhatsAppTemplate[]
   consultationFee: number
+  // Absent on data saved before the courier quick-add existed; getSettings fills 0.
+  courierFee?: number
   defaultDueDays: number
   encryptDrive: boolean
   sessions: ClinicSession[]

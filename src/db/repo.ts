@@ -81,6 +81,7 @@ export const DEFAULT_SETTINGS: ClinicSettings = {
     },
   ],
   consultationFee: 0,
+  courierFee: 0,
   defaultDueDays: 30,
   encryptDrive: false,
   // Morning and evening sessions are the norm for Indian OPDs.
