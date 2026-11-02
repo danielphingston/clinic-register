@@ -315,22 +315,19 @@ describe('visit UI', () => {
     expect(await screen.findByRole('heading', { name: 'Asha' })).toBeInTheDocument()
   })
 
-  it('keeps the old Modalities text of an existing visit and never offers it on a new one', async () => {
+  it('hides the old Modalities text of an existing visit but keeps it on save', async () => {
     const user = userEvent.setup()
     const p = await createPatient({ name: 'Asha' })
     await saveVisit({ patientId: p.id, date: todayISO(), caseNotes: { complaint: 'Cold', complaints: ['Cold'], modalities: 'Worse at night' }, items: [] })
     const [v] = await visitsForPatient(p.id)
     open(`/patients/${p.id}/visits/${v.id}`)
-    expect(await screen.findByRole('textbox', { name: 'Modalities (old notes)' })).toHaveValue('Worse at night')
+    expect(await screen.findByRole('combobox', { name: 'Complaint 1' })).toHaveValue('Cold')
+    expect(screen.queryByText('Worse at night')).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Modalities' })).not.toBeInTheDocument()
     await user.type(screen.getByRole('combobox', { name: 'Duration 1' }), '2 days')
     await user.click(screen.getByRole('button', { name: 'Save visit' }))
     await waitFor(async () => expect((await visitsForPatient(p.id))[0].caseNotes.complaintDetails).toEqual([{ complaint: 'Cold', duration: '2 days' }]))
     expect((await visitsForPatient(p.id))[0].caseNotes.modalities).toBe('Worse at night')
-
-    open(`/patients/${p.id}/visits/new`)
-    expect(await screen.findByRole('combobox', { name: 'Complaint 1' })).toBeInTheDocument()
-    expect(screen.queryByRole('textbox', { name: 'Modalities (old notes)' })).not.toBeInTheDocument()
   })
 
   it('asks before leaving a visit with unsaved changes', async () => {

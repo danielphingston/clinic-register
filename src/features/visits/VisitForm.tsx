@@ -19,7 +19,7 @@ import { VisitAttachments } from '../attachments/VisitAttachments'
 
 // The free-text tabs; complaints and the generals checklist are structured fields beside them.
 type NoteKey = 'complaint' | 'history' | 'mentals' | 'generals' | 'constitution'
-// `modalities` is the old free-text tab: kept on old visits, never offered on new ones.
+// `modalities` is the old free-text tab: no longer shown, but an old visit's text is kept on save.
 type TextNotes = Pick<CaseNotes, NoteKey | 'modalities'>
 
 const TABS: { key: NoteKey; label: string }[] = [
@@ -229,17 +229,7 @@ function VisitFormInner() {
         </div>
         <div role="tabpanel" id="case-panel" aria-labelledby={`tab-${tab}`}>
           {tab === 'complaint' ? (
-            <>
-              <ComplaintCards cards={cards} known={known} onChange={setCards} />
-              {loaded?.caseNotes.modalities?.trim() && (
-                <div className="mt-3">
-                  <label className="label" htmlFor="old-modalities">
-                    Modalities (old notes)
-                  </label>
-                  <textarea id="old-modalities" className="input" rows={3} value={notes.modalities ?? ''} onChange={(e) => setNotes((n) => ({ ...n, modalities: e.target.value }))} />
-                </div>
-              )}
-            </>
+            <ComplaintCards cards={cards} known={known} onChange={setCards} />
           ) : (
             <>
               {tab === 'generals' && <GeneralsChecklistFields value={checklist} onChange={setChecklist} />}
