@@ -59,7 +59,8 @@ export interface CaseNotes {
   complaintDetails?: ComplaintDetail[] // absent on records created before the cards existed
   complaintStatus?: ComplaintStatus[] // progress of the previous visit's complaints
   generalsChecklist?: GeneralsChecklist
-  history?: string
+  history?: string // shown as "Past history"
+  familyHistory?: string
   mentals?: string
   generals?: string
   modalities?: string // old free-text tab; no longer shown on new visits, kept on old ones
