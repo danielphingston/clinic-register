@@ -186,6 +186,7 @@ export function Settings() {
     if (sessionError) return fail('hours', sessionError)
     if (!(form.slotMinutes >= 5 && form.slotMinutes <= 120)) return fail('hours', 'Slot length must be 5–120 minutes')
     if (!(form.consultationFee >= 0)) return fail('billing', 'Enter a consultation fee of 0 or more')
+    if (!((form.courierFee ?? 0) >= 0)) return fail('billing', 'Enter a courier fee of 0 or more')
     if (!(Number.isInteger(form.defaultDueDays) && form.defaultDueDays >= 1 && form.defaultDueDays <= 365))
       return fail('billing', 'Default due days must be 1–365')
     if (!form.whatsappDueTemplate.trim()) return fail('whatsapp', 'Enter a WhatsApp reminder message')
@@ -371,6 +372,20 @@ export function Settings() {
               onChange={(n) => set('consultationFee', n)}
             />
             <p className="mt-1 text-xs text-slate-500">Prefilled on bills made from a visit.</p>
+          </div>
+          <div>
+            <label className="label" htmlFor="courierFee">
+              Courier fee (₹)
+            </label>
+            <NumberInput
+              id="courierFee"
+              min={0}
+              inputMode="decimal"
+              className="input"
+              value={form.courierFee ?? 0}
+              onChange={(n) => set('courierFee', n)}
+            />
+            <p className="mt-1 text-xs text-slate-500">Used by the "+ Courier" button on bills.</p>
           </div>
           <div>
             <label className="label" htmlFor="defaultDueDays">

@@ -30,6 +30,22 @@ const year = today.slice(0, 4)
 const item = (amount: number, desc = 'Consultation') => ({ desc, amount })
 
 describe('billing UI', () => {
+  it('adds courier charges at the fee from settings, once', async () => {
+    await saveSettings({ ...(await getSettings()), consultationFee: 300, courierFee: 80 })
+    const p = await createPatient({ name: 'Asha', phone: '9876543210' })
+    const user = userEvent.setup()
+    open(`/patients/${p.id}/visits/new`)
+    await user.click(await screen.findByRole('button', { name: 'Save & bill' }))
+
+    const d = within(await screen.findByRole('dialog', { name: 'New bill' }))
+    await waitFor(() => expect(d.getByLabelText('Amount 1')).toHaveValue('300'))
+    await user.click(d.getByRole('button', { name: '+ Courier' }))
+    expect(d.getByLabelText('Item 2')).toHaveValue('Courier charges')
+    await waitFor(() => expect(d.getByLabelText('Amount 2')).toHaveValue('80'))
+    expect(d.getByTestId('bill-total')).toHaveTextContent('₹380')
+    expect(d.queryByRole('button', { name: '+ Courier' })).not.toBeInTheDocument()
+  })
+
   it('bills from a visit with the consultation fee, pays in full and offers the receipt', async () => {
     await saveSettings({ ...(await getSettings()), consultationFee: 300 })
     const p = await createPatient({ name: 'Asha', phone: '9876543210' })
