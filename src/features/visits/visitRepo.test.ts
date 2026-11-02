@@ -3,7 +3,12 @@ import { db } from '../../db/db'
 import { addDays, todayISO } from '../../lib/format'
 import { createPatient, deletePatient } from '../patients/patientRepo'
 import { blankRow, repeatRows, rowsFromItems, rowsToInput } from './rxRows'
-import { followUpsDue, itemsForVisit, previousVisit, recentPatients, saveVisit } from './visitRepo'
+import { insert } from '../../db/repo'
+import type { Attachment } from '../../db/types'
+import { createBill, voidBill } from '../billing/billingRepo'
+import { cancelCertificate, createCertificate } from '../certificates/certificateRepo'
+import { createStockItem } from '../stock/stockRepo'
+import { deleteVisit, followUpsDue, itemsForVisit, previousVisit, recentPatients, saveVisit, visitDeleteBlockers, VisitDeleteError } from './visitRepo'
 
 const rx = (remedyId: string, potency = '30C') => ({ remedyId, potency, dose: '4 pills', repetition: 'TDS', durationDays: 7 })
 
@@ -137,5 +142,94 @@ describe('dashboard queries', () => {
     await saveVisit({ patientId: ps[0].id, date: '2026-09-30', caseNotes: {}, items: [] })
     await deletePatient(ps[6].id)
     expect((await recentPatients(5)).map((r) => r.patient.name)).toEqual(['A', 'F', 'E', 'D', 'C'])
+  })
+})
+
+describe('deleteVisit', () => {
+  async function setup() {
+    const p = await createPatient({ name: 'A' })
+    const id = await saveVisit({ patientId: p.id, date: '2026-09-01', caseNotes: { complaint: 'Cough' }, items: [rx('a')] })
+    return { p, id }
+  }
+
+  it('is blocked by a later visit until that one is deleted', async () => {
+    const { p, id } = await setup()
+    const later = await saveVisit({ patientId: p.id, date: '2026-09-15', caseNotes: {}, items: [] })
+    const blockers = await visitDeleteBlockers(id)
+    expect(blockers).toHaveLength(1)
+    expect(blockers[0].reason).toMatch(/^Has a follow-up visit on .*Delete that visit first\.$/)
+    expect(blockers[0].to).toBe(`/patients/${p.id}/visits/${later}`)
+    await expect(deleteVisit(id)).rejects.toBeInstanceOf(VisitDeleteError)
+    expect((await db.visits.get(id))?.deleted).toBe(0)
+
+    await deleteVisit(later)
+    await deleteVisit(id)
+    expect((await db.visits.get(id))?.deleted).toBe(1)
+  })
+
+  it('treats a same-date visit created later as a follow-up', async () => {
+    const { p, id } = await setup()
+    await saveVisit({ patientId: p.id, date: '2026-09-01', caseNotes: {}, items: [] })
+    expect(await visitDeleteBlockers(id)).toHaveLength(1)
+  })
+
+  it('is blocked by a bill until it is voided', async () => {
+    const { p, id } = await setup()
+    const { bill } = await createBill({ patientId: p.id, visitId: id, date: '2026-09-01', items: [{ desc: 'Consultation', amount: 100 }], discount: 0 })
+    expect((await visitDeleteBlockers(id)).map((b) => b.reason)).toEqual([`Linked to bill ${bill.billNo} — void it first.`])
+    await expect(deleteVisit(id)).rejects.toThrow(/void it first/)
+    await voidBill(bill.id)
+    await deleteVisit(id)
+    expect((await db.visits.get(id))?.deleted).toBe(1)
+  })
+
+  it('is blocked by a certificate until it is cancelled', async () => {
+    const { p, id } = await setup()
+    const cert = await createCertificate({ kind: 'medical', patientId: p.id, visitId: id, date: '2026-09-01', title: 'Medical Certificate', body: 'Rest advised.' })
+    expect((await visitDeleteBlockers(id)).map((b) => b.reason)).toEqual([`Certificate ${cert.certNo} — cancel it first.`])
+    await cancelCertificate(cert.id)
+    await deleteVisit(id)
+    expect((await db.visits.get(id))?.deleted).toBe(1)
+  })
+
+  it('is blocked by attachments until they are deleted', async () => {
+    const { p, id } = await setup()
+    const att = await insert<Attachment>(db.attachments, {
+      patientId: p.id, visitId: id, kind: 'lab', mime: 'image/jpeg', fileName: 'a.jpg', originalSize: 1, size: 1, blobHash: 'h',
+    })
+    expect((await visitDeleteBlockers(id)).map((b) => b.reason)).toEqual(['1 attachment(s) — delete them first.'])
+    await db.attachments.update(att.id, { deleted: 1 })
+    expect(await visitDeleteBlockers(id)).toEqual([])
+  })
+
+  it('tombstones the visit and Rx and returns dispensed stock', async () => {
+    const p = await createPatient({ name: 'A' })
+    const stock = await createStockItem({ remedyId: 'a', potency: '30C', form: 'globules', unit: 'g', lowStockAt: 1, price: 0, openingQty: 10 })
+    const id = await saveVisit({
+      patientId: p.id, date: '2026-09-01', caseNotes: {},
+      items: [{ ...rx('a'), stockItemId: stock.id, qtyDispensed: 4 }],
+    })
+    expect((await db.stockItems.get(stock.id))?.qty).toBe(6)
+    const [item] = await itemsForVisit(id)
+
+    await deleteVisit(id)
+    expect((await db.visits.get(id))?.deleted).toBe(1)
+    expect((await db.prescriptionItems.get(item.id))?.deleted).toBe(1)
+    expect((await db.stockItems.get(stock.id))?.qty).toBe(10)
+    // History is kept: the original dispense plus a correcting move.
+    expect(await db.stockMoves.where('refId').equals(item.id).count()).toBe(2)
+    expect(await itemsForVisit(id)).toEqual([])
+  })
+
+  it('stops counting as the previous visit or a due follow-up', async () => {
+    const today = todayISO()
+    const p = await createPatient({ name: 'A' })
+    const v1 = await saveVisit({ patientId: p.id, date: addDays(today, -20), caseNotes: { complaint: 'Cough' }, items: [] })
+    const v2 = await saveVisit({ patientId: p.id, date: addDays(today, -10), caseNotes: {}, followUpDate: addDays(today, -1), items: [] })
+    expect((await followUpsDue(today))[0].visit.id).toBe(v2)
+    await deleteVisit(v2)
+    expect((await previousVisit(p.id))?.id).toBe(v1)
+    expect(await followUpsDue(today)).toEqual([])
+    expect((await recentPatients(5))[0].lastVisit.id).toBe(v1)
   })
 })

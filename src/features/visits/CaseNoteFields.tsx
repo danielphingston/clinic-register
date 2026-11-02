@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react'
-import type { ComplaintStatusValue, GeneralsChecklist } from '../../db/types'
-import { LEVELS, SLEEP_OPTIONS, STATUS_OPTIONS, STOOL_OPTIONS, URINE_OPTIONS } from './caseNotes'
+import { useEffect, useRef, useState } from 'react'
+import type { ComplaintDetail, ComplaintStatusValue, GeneralsChecklist } from '../../db/types'
+import { addTerm, hasTerm, LEVELS, MODALITY_QUICK_PICKS, SLEEP_OPTIONS, STATUS_OPTIONS, STOOL_OPTIONS, toggleTerm, URINE_OPTIONS } from './caseNotes'
+import type { TermField } from './visitRepo'
 
 function Pill({ pressed, onClick, children }: { pressed: boolean; onClick: () => void; children: string }) {
   return (
@@ -89,46 +90,145 @@ export function GeneralsChecklistFields({ value, onChange }: { value: GeneralsCh
   )
 }
 
-// One single-line input per complaint. Enter adds a line below and focuses it.
-export function ComplaintLines({ lines, onChange }: { lines: string[]; onChange: (lines: string[]) => void }) {
+const TERM_FIELDS: TermField[] = ['complaint', 'duration', 'aggravation', 'amelioration']
+
+// Removable chips, an add box (Enter, "Add" or leaving the box) and quick chips that toggle an entry.
+function Modality({ n, field, title, sign, value, onChange }: { n: number; field: 'aggravation' | 'amelioration'; title: string; sign: string; value?: string[]; onChange: (v: string[]) => void }) {
+  const [draft, setDraft] = useState('')
+  const entries = value ?? []
+  const commit = () => {
+    if (draft.trim()) onChange(addTerm(entries, draft))
+    setDraft('')
+  }
+  return (
+    <div role="group" aria-label={`${title} ${n}`}>
+      <label className="label" htmlFor={`c${n}-${field}`}>
+        {title} ({sign})
+      </label>
+      {entries.length > 0 && (
+        <ul className="mb-1.5 flex flex-wrap gap-1">
+          {entries.map((t) => (
+            <li key={t.toLowerCase()} className="inline-flex items-center gap-1 rounded-full bg-slate-100 py-0.5 pl-2.5 pr-1 text-sm">
+              {t}
+              <button type="button" className="rounded-full px-1.5 text-slate-500 hover:text-red-700" aria-label={`Remove ${t} from ${title.toLowerCase()} ${n}`} onClick={() => onChange(toggleTerm(entries, t))}>
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex gap-2">
+        <input
+          id={`c${n}-${field}`}
+          className="input"
+          aria-label={`${title} ${n}`}
+          placeholder="Type and press Enter"
+          list={`known-${field}`}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return
+            e.preventDefault()
+            commit()
+          }}
+          onBlur={commit}
+        />
+        <button type="button" className="btn-ghost border border-slate-300 px-3 py-1" aria-label={`Add ${field} ${n}`} onClick={commit}>
+          Add
+        </button>
+      </div>
+      <div role="group" aria-label={`${title} ${n} quick picks`} className="mt-1.5 flex flex-wrap gap-1">
+        {MODALITY_QUICK_PICKS.map((t) => (
+          <button
+            key={t}
+            type="button"
+            aria-pressed={hasTerm(entries, t)}
+            onClick={() => onChange(toggleTerm(entries, t))}
+            className={`rounded-full border px-2 py-0.5 text-xs ${hasTerm(entries, t) ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-100'}`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// One card per complaint: the complaint, its duration, and what aggravates and ameliorates it.
+export function ComplaintCards({ cards, known, onChange }: { cards: ComplaintDetail[]; known?: Record<TermField, string[]>; onChange: (cards: ComplaintDetail[]) => void }) {
   const focus = useRef<number | null>(null)
   useEffect(() => {
     if (focus.current === null) return
     document.querySelector<HTMLInputElement>(`[aria-label="Complaint ${focus.current + 1}"]`)?.focus()
     focus.current = null
-  }, [lines.length])
-  function insertAfter(i: number) {
-    focus.current = i + 1
-    onChange([...lines.slice(0, i + 1), '', ...lines.slice(i + 1)])
-  }
+  }, [cards.length])
+  const set = (i: number, changes: ComplaintDetail) => onChange(cards.map((c, j) => (j === i ? { ...c, ...changes } : c)))
   return (
-    <div className="space-y-2">
-      {lines.map((line, i) => (
-        <div key={i} className="flex gap-2">
-          <input
-            className="input"
-            aria-label={`Complaint ${i + 1}`}
-            value={line}
-            onChange={(e) => onChange(lines.map((l, j) => (j === i ? e.target.value : l)))}
-            onKeyDown={(e) => {
-              if (e.key !== 'Enter') return
-              e.preventDefault()
-              insertAfter(i)
-            }}
-          />
-          <button
-            type="button"
-            className="btn-ghost px-2 text-red-700"
-            aria-label={`Remove complaint ${i + 1}`}
-            title="Remove"
-            onClick={() => onChange(lines.length > 1 ? lines.filter((_, j) => j !== i) : [''])}
-          >
-            ×
-          </button>
+    <div className="space-y-3">
+      {TERM_FIELDS.map((f) => (
+        <datalist key={f} id={`known-${f}`}>
+          {(known?.[f] ?? []).map((t) => (
+            <option key={t} value={t} />
+          ))}
+        </datalist>
+      ))}
+      {cards.map((c, i) => (
+        <div key={i} role="group" aria-label={`Complaint card ${i + 1}`} className="rounded-md border border-slate-200 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm font-semibold text-slate-700">Complaint {i + 1}</span>
+            <button
+              type="button"
+              className="btn-ghost px-2 py-0.5 text-red-700"
+              aria-label={`Remove complaint ${i + 1}`}
+              title="Remove"
+              onClick={() => onChange(cards.length > 1 ? cards.filter((_, j) => j !== i) : [{}])}
+            >
+              ×
+            </button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="label" htmlFor={`c${i + 1}-complaint`}>
+                Complaint
+              </label>
+              <input
+                id={`c${i + 1}-complaint`}
+                className="input"
+                aria-label={`Complaint ${i + 1}`}
+                placeholder="e.g. Throbbing headache, right temple"
+                list="known-complaint"
+                value={c.complaint ?? ''}
+                onChange={(e) => set(i, { complaint: e.target.value })}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="label" htmlFor={`c${i + 1}-duration`}>
+                Duration
+              </label>
+              <input
+                id={`c${i + 1}-duration`}
+                className="input"
+                aria-label={`Duration ${i + 1}`}
+                placeholder="e.g. 3 months"
+                list="known-duration"
+                value={c.duration ?? ''}
+                onChange={(e) => set(i, { duration: e.target.value })}
+              />
+            </div>
+            <Modality n={i + 1} field="aggravation" title="Aggravation" sign="<" value={c.aggravation} onChange={(aggravation) => set(i, { aggravation })} />
+            <Modality n={i + 1} field="amelioration" title="Amelioration" sign=">" value={c.amelioration} onChange={(amelioration) => set(i, { amelioration })} />
+          </div>
         </div>
       ))}
-      <button type="button" className="btn-ghost border border-slate-300 px-3 py-1" aria-label="Add complaint" title="Add complaint" onClick={() => insertAfter(lines.length - 1)}>
-        +
+      <button
+        type="button"
+        className="btn-ghost border border-slate-300 px-3 py-1"
+        onClick={() => {
+          focus.current = cards.length
+          onChange([...cards, {}])
+        }}
+      >
+        + Add complaint
       </button>
     </div>
   )

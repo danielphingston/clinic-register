@@ -290,6 +290,18 @@ export function BillDialog({
                 + Consultation
               </button>
             )}
+            {!rows.some((r) => r.desc === 'Courier charges') && (
+              <button
+                type="button"
+                className="btn-ghost border border-slate-300 px-3 py-1"
+                onClick={async () => {
+                  const fee = (await getSettings()).courierFee ?? 0
+                  addRow(row('Courier charges', fee > 0 ? String(fee) : ''))
+                }}
+              >
+                + Courier
+              </button>
+            )}
             <button type="button" className="btn-ghost border border-dashed border-slate-300 px-3 py-1" onClick={addBlankRow}>
               + Item
             </button>

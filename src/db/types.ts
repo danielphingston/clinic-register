@@ -44,15 +44,26 @@ export interface ComplaintStatus {
   status: ComplaintStatusValue
 }
 
+// One complaint card. Every field is optional; old single-line complaints
+// become cards with only `complaint` set.
+export interface ComplaintDetail {
+  complaint?: string
+  duration?: string // duration / onset
+  aggravation?: string[] // modalities that make it worse (<)
+  amelioration?: string[] // modalities that make it better (>)
+}
+
 export interface CaseNotes {
   complaint?: string // complaints joined with newlines; kept for print, certificates and reports
-  complaints?: string[] // absent on records created before the list existed
+  complaints?: string[] // one summary line per complaint; absent on records created before the list existed
+  complaintDetails?: ComplaintDetail[] // absent on records created before the cards existed
   complaintStatus?: ComplaintStatus[] // progress of the previous visit's complaints
   generalsChecklist?: GeneralsChecklist
-  history?: string
+  history?: string // shown as "Past history"
+  familyHistory?: string
   mentals?: string
   generals?: string
-  modalities?: string
+  modalities?: string // old free-text tab; no longer shown on new visits, kept on old ones
   constitution?: string
 }
 
@@ -246,6 +257,8 @@ export interface ClinicSettings {
   // Absent on data saved before templates existed; getSettings fills the defaults.
   whatsappTemplates?: WhatsAppTemplate[]
   consultationFee: number
+  // Absent on data saved before the courier quick-add existed; getSettings fills 0.
+  courierFee?: number
   defaultDueDays: number
   encryptDrive: boolean
   sessions: ClinicSession[]

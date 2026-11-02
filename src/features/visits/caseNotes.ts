@@ -1,4 +1,4 @@
-import type { CaseNotes, ComplaintStatus, ComplaintStatusValue, GeneralsChecklist, Level, UrineOption } from '../../db/types'
+import type { CaseNotes, ComplaintDetail, ComplaintStatus, ComplaintStatusValue, GeneralsChecklist, Level, UrineOption } from '../../db/types'
 
 export const LEVELS: { value: Level; label: string }[] = [
   { value: 'increased', label: 'Increased' },
@@ -32,6 +32,9 @@ export const STATUS_OPTIONS: { value: ComplaintStatusValue; label: string }[] = 
   { value: 'worse', label: 'Worsened' },
   { value: 'resolved', label: 'Resolved' },
 ]
+
+// Tap-to-pick terms for Aggravation (<) and Amelioration (>).
+export const MODALITY_QUICK_PICKS = ['Morning', 'Evening', 'Night', 'Cold', 'Heat', 'Damp weather', 'Open air', 'Motion', 'Rest', 'Lying down', 'Pressure', 'Touch', 'Eating', 'Sun', 'Noise']
 
 const label = (opts: readonly { value: string; label: string }[], v: string) => opts.find((o) => o.value === v)?.label ?? v
 
@@ -108,4 +111,71 @@ export function checklistSummary(c: GeneralsChecklist | undefined): string {
 // ["Headache — Better", ...]
 export function statusSummary(statuses: ComplaintStatus[] | undefined): string[] {
   return (statuses ?? []).map((s) => `${s.complaint} — ${label(STATUS_OPTIONS, s.status)}`)
+}
+
+// A new visit starts with every general at its normal option; only the
+// differences need tapping.
+export function defaultGenerals(): GeneralsChecklist {
+  return { appetite: 'normal', thirst: 'normal', urine: ['normal'], sleep: 'sound', stool: 'regular', sweat: 'normal' }
+}
+
+// Trimmed entries without blanks or case-insensitive duplicates (first spelling wins).
+export function cleanEntries(list: string[] | undefined): string[] {
+  return dedupe(normaliseComplaints(list ?? []))
+}
+
+export function hasTerm(list: string[] | undefined, term: string): boolean {
+  return (list ?? []).some((t) => t.trim().toLowerCase() === term.trim().toLowerCase())
+}
+
+// Appends an entry unless it is blank or already there.
+export function addTerm(list: string[] | undefined, term: string): string[] {
+  return cleanEntries([...(list ?? []), term])
+}
+
+// Adds the term to the list, or removes it when already there.
+export function toggleTerm(list: string[] | undefined, term: string): string[] {
+  return hasTerm(list, term) ? (list ?? []).filter((t) => t.trim().toLowerCase() !== term.trim().toLowerCase()) : addTerm(list, term)
+}
+
+// Trimmed fields and entries; empty ones are dropped.
+export function cleanDetail(d: ComplaintDetail): ComplaintDetail {
+  const out: ComplaintDetail = {}
+  const complaint = d.complaint?.trim()
+  const duration = d.duration?.trim()
+  const aggravation = cleanEntries(d.aggravation)
+  const amelioration = cleanEntries(d.amelioration)
+  if (complaint) out.complaint = complaint
+  if (duration) out.duration = duration
+  if (aggravation.length) out.aggravation = aggravation
+  if (amelioration.length) out.amelioration = amelioration
+  return out
+}
+
+// Cleaned cards, without the empty ones.
+export function cleanDetails(list: ComplaintDetail[]): ComplaintDetail[] {
+  return list.map(cleanDetail).filter((d) => Object.keys(d).length > 0)
+}
+
+// Lower-cases the start of a modality term so it reads mid-sentence
+// ("Damp weather" -> "damp weather"); acronyms stay.
+const lowerTerm = (t: string) => (/^[A-Z][^A-Z]/.test(t) || t.length === 1 ? t[0].toLowerCase() + t.slice(1) : t)
+
+// "Throbbing headache, right temple; since 3 months; < sun, noise; > pressure"
+export function complaintSummary(d: ComplaintDetail): string {
+  const c = cleanDetail(d)
+  return [
+    c.complaint,
+    c.duration && `since ${c.duration}`,
+    c.aggravation && `< ${c.aggravation.map(lowerTerm).join(', ')}`,
+    c.amelioration && `> ${c.amelioration.map(lowerTerm).join(', ')}`,
+  ]
+    .filter(Boolean)
+    .join('; ')
+}
+
+// The cards of a visit: the saved ones, else each old complaint line as a card.
+export function detailsFromNotes(notes: CaseNotes | undefined): ComplaintDetail[] {
+  if (notes?.complaintDetails?.length) return notes.complaintDetails
+  return complaintLines(notes).map((complaint) => ({ complaint }))
 }

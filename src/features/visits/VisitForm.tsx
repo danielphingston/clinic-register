@@ -3,30 +3,30 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom'
 import { Modal } from '../../app/Modal'
 import { db } from '../../db/db'
-import type { CaseNotes, ComplaintStatusValue, GeneralsChecklist, Visit } from '../../db/types'
+import type { CaseNotes, ComplaintDetail, ComplaintStatusValue, GeneralsChecklist, Visit } from '../../db/types'
 import { ageSex } from '../../lib/age'
 import { addDays, formatDate, todayISO } from '../../lib/format'
 import { RemedyAutocomplete } from '../remedies/RemedyAutocomplete'
 import { remedyMap } from '../remedies/remedyRepo'
 import { POTENCY_PRESETS, REPETITION_PRESETS, rxDetails } from './rxFormat'
 import { blankRow, repeatRows, rowsFromItems, rowsToInput, type RxRow } from './rxRows'
-import { cleanChecklist, cleanStatuses, complaintLines, normaliseComplaints, previousComplaints } from './caseNotes'
-import { ComplaintLines, ComplaintStatusRows, GeneralsChecklistFields } from './CaseNoteFields'
-import { itemsForVisit, previousVisit, saveVisit } from './visitRepo'
+import { cleanChecklist, cleanDetails, cleanStatuses, complaintSummary, defaultGenerals, detailsFromNotes, previousComplaints } from './caseNotes'
+import { ComplaintCards, ComplaintStatusRows, GeneralsChecklistFields } from './CaseNoteFields'
+import { deleteVisit, itemsForVisit, knownComplaintTerms, previousVisit, saveVisit, visitDeleteBlockers, VisitDeleteError, type VisitDeleteBlocker } from './visitRepo'
 import { completeAppointmentForVisit } from '../appointments/appointmentRepo'
 import { DispenseField } from '../stock/DispenseField'
 import { VisitAttachments } from '../attachments/VisitAttachments'
 
 // The free-text tabs; complaints and the generals checklist are structured fields beside them.
-type NoteKey = 'complaint' | 'history' | 'mentals' | 'generals' | 'modalities' | 'constitution'
-type TextNotes = Pick<CaseNotes, NoteKey>
+type NoteKey = 'complaint' | 'history' | 'mentals' | 'generals' | 'constitution'
+// `modalities` is the old free-text tab: no longer shown, but an old visit's text is kept on save.
+type TextNotes = Pick<CaseNotes, NoteKey | 'modalities' | 'familyHistory'>
 
 const TABS: { key: NoteKey; label: string }[] = [
   { key: 'complaint', label: 'Complaint' },
   { key: 'history', label: 'History' },
   { key: 'mentals', label: 'Mentals' },
   { key: 'generals', label: 'Generals' },
-  { key: 'modalities', label: 'Modalities' },
   { key: 'constitution', label: 'Constitution' },
 ]
 
@@ -41,12 +41,14 @@ function VisitFormInner() {
   const navigate = useNavigate()
   const patient = useLiveQuery(async () => db.patients.get(patientId), [patientId])
   const remedies = useLiveQuery(remedyMap)
+  const known = useLiveQuery(knownComplaintTerms)
 
   const [loaded, setLoaded] = useState<Visit | null | undefined>(visitId ? undefined : null)
   const [date, setDate] = useState(todayISO())
   const [notes, setNotes] = useState<TextNotes>({})
-  const [complaints, setComplaints] = useState<string[]>([''])
-  const [checklist, setChecklist] = useState<GeneralsChecklist>({})
+  const [cards, setCards] = useState<ComplaintDetail[]>([{}])
+  // A new visit starts with the generals at Normal; an edited one shows what was saved.
+  const [checklist, setChecklist] = useState<GeneralsChecklist>(() => (visitId ? {} : defaultGenerals()))
   // Progress of the previous visit's complaints, keyed by lowercased complaint.
   const [statuses, setStatuses] = useState<Record<string, ComplaintStatusValue | undefined>>({})
   const [tab, setTab] = useState<NoteKey>('complaint')
@@ -55,6 +57,8 @@ function VisitFormInner() {
   const [rows, setRows] = useState<RxRow[]>(() => [blankRow()])
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  // Delete dialog: the blockers (none = ready to confirm), or null when closed.
+  const [deleting, setDeleting] = useState<VisitDeleteBlocker[] | null>(null)
   // Stock already deducted by this visit's saved rows, per stock item.
   const [savedDispense, setSavedDispense] = useState<Map<string, number>>(() => new Map())
 
@@ -72,18 +76,18 @@ function VisitFormInner() {
       const items = await itemsForVisit(v.id)
       if (cancelled) return
       setDate(v.date)
-      const { history, mentals, generals, modalities, constitution } = v.caseNotes ?? {}
-      setNotes({ history, mentals, generals, modalities, constitution })
-      const lines = complaintLines(v.caseNotes)
-      setComplaints(lines.length ? lines : [''])
+      const { history, familyHistory, mentals, generals, modalities, constitution } = v.caseNotes ?? {}
+      setNotes({ history, familyHistory, mentals, generals, modalities, constitution })
+      const saved = detailsFromNotes(v.caseNotes)
+      setCards(saved.length ? saved : [{}])
       setChecklist(v.caseNotes?.generalsChecklist ?? {})
       setStatuses(Object.fromEntries((v.caseNotes?.complaintStatus ?? []).map((s) => [s.complaint.toLowerCase(), s.status])))
       setAdvice(v.advice ?? '')
       setFollowUp(v.followUpDate ?? '')
       setRows(items.length ? rowsFromItems(items, true) : [blankRow()])
-      const saved = new Map<string, number>()
-      for (const i of items) if (i.stockItemId && i.qtyDispensed) saved.set(i.stockItemId, (saved.get(i.stockItemId) ?? 0) + i.qtyDispensed)
-      setSavedDispense(saved)
+      const dispensed = new Map<string, number>()
+      for (const i of items) if (i.stockItemId && i.qtyDispensed) dispensed.set(i.stockItemId, (dispensed.get(i.stockItemId) ?? 0) + i.qtyDispensed)
+      setSavedDispense(dispensed)
       setLoaded(v)
     })()
     return () => {
@@ -107,10 +111,11 @@ function VisitFormInner() {
     for (const s of loaded?.caseNotes.complaintStatus ?? []) if (!known.has(s.complaint.toLowerCase())) list.push(s.complaint)
     return list
   })()
-  const lines = normaliseComplaints(complaints)
+  const details = cleanDetails(cards)
+  const lines = details.map(complaintSummary)
   const caseNotes: CaseNotes = {
     ...Object.fromEntries(Object.entries(notes).filter(([, v]) => v?.trim())),
-    ...(lines.length && { complaint: lines.join('\n'), complaints: lines }),
+    ...(lines.length && { complaint: lines.join('\n'), complaints: lines, complaintDetails: details }),
     generalsChecklist: cleanChecklist(checklist),
     complaintStatus: cleanStatuses(asked, statuses),
   }
@@ -184,6 +189,24 @@ function VisitFormInner() {
     }
   }
 
+  async function askDelete() {
+    setDeleting(await visitDeleteBlockers(loaded!.id))
+  }
+
+  async function confirmDelete() {
+    try {
+      await deleteVisit(loaded!.id)
+      leaving.current = true
+      navigate(`/patients/${patientId}`, { replace: true })
+    } catch (err) {
+      if (err instanceof VisitDeleteError) setDeleting(err.blockers)
+      else {
+        setDeleting(null)
+        setError((err as Error).message)
+      }
+    }
+  }
+
   return (
     <form onSubmit={handleSubmit} className="max-w-5xl space-y-4" noValidate>
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -220,13 +243,30 @@ function VisitFormInner() {
               }`}
             >
               {t.label}
-              {(t.key === 'complaint' ? lines.length > 0 : notes[t.key]?.trim()) && tab !== t.key && <span className="ml-1 text-brand-600">•</span>}
+              {(t.key === 'complaint' ? lines.length > 0 : t.key === 'history' ? notes.history?.trim() || notes.familyHistory?.trim() : notes[t.key]?.trim()) && tab !== t.key && <span className="ml-1 text-brand-600">•</span>}
             </button>
           ))}
         </div>
         <div role="tabpanel" id="case-panel" aria-labelledby={`tab-${tab}`}>
           {tab === 'complaint' ? (
-            <ComplaintLines lines={complaints} onChange={setComplaints} />
+            <ComplaintCards cards={cards} known={known} onChange={setCards} />
+          ) : tab === 'history' ? (
+            <div className="space-y-3">
+              {(['history', 'familyHistory'] as const).map((k) => (
+                <div key={k}>
+                  <label className="label" htmlFor={`notes-${k}`}>
+                    {k === 'history' ? 'Past history' : 'Family history'}
+                  </label>
+                  <textarea
+                    id={`notes-${k}`}
+                    className="input"
+                    rows={4}
+                    value={notes[k] ?? ''}
+                    onChange={(e) => setNotes((n) => ({ ...n, [k]: e.target.value }))}
+                  />
+                </div>
+              ))}
+            </div>
           ) : (
             <>
               {tab === 'generals' && <GeneralsChecklistFields value={checklist} onChange={setChecklist} />}
@@ -462,7 +502,55 @@ function VisitFormInner() {
         <Link to={`/patients/${patient.id}`} className="btn-ghost border border-slate-300">
           Cancel
         </Link>
+        {loaded && (
+          <button type="button" className="btn-ghost ml-auto border border-red-300 text-red-700" disabled={saving} onClick={askDelete}>
+            Delete visit
+          </button>
+        )}
       </div>
+      {deleting && loaded && (
+        <Modal title={deleting.length ? 'Cannot delete this visit' : 'Delete visit?'} onClose={() => setDeleting(null)}>
+          {deleting.length ? (
+            <>
+              <p className="text-sm text-slate-600">This visit has records that depend on it:</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                {deleting.map((b) => (
+                  <li key={b.reason}>
+                    {b.reason}
+                    {b.to && !b.to.endsWith(`/visits/${loaded.id}`) && (
+                      <>
+                        {' '}
+                        <Link to={b.to} className="font-medium text-brand-700 underline">
+                          Open
+                        </Link>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-4">
+                <button type="button" className="btn-primary" data-autofocus onClick={() => setDeleting(null)}>
+                  OK
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-slate-600">
+                Delete this visit from {formatDate(loaded.date)}? Its prescription will be removed and dispensed medicines returned to stock.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button type="button" className="btn-ghost border border-slate-300" data-autofocus onClick={() => setDeleting(null)}>
+                  Keep visit
+                </button>
+                <button type="button" className="btn-primary bg-red-700 hover:bg-red-800" onClick={confirmDelete}>
+                  Delete visit
+                </button>
+              </div>
+            </>
+          )}
+        </Modal>
+      )}
       {blocker.state === 'blocked' && (
         <Modal title="Leave without saving?" onClose={() => blocker.reset()}>
           <p className="text-sm text-slate-600">This visit has changes that are not saved yet. If you leave now, they will be lost.</p>

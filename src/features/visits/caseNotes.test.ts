@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checklistSummary, cleanChecklist, cleanStatuses, complaintLines, normaliseComplaints, previousComplaints, statusSummary } from './caseNotes'
+import { addTerm, checklistSummary, cleanChecklist, cleanDetail, cleanDetails, cleanEntries, cleanStatuses, complaintLines, complaintSummary, defaultGenerals, detailsFromNotes, hasTerm, toggleTerm, normaliseComplaints, previousComplaints, statusSummary } from './caseNotes'
 
 describe('complaints', () => {
   it('normalises lines by trimming and dropping blanks', () => {
@@ -49,5 +49,55 @@ describe('generals checklist', () => {
       'Appetite: Decreased · Thirst: Increased · Urine: Frequent micturition, Nocturnal urination · Stool: Constipation (every 3 days) · Sweat: Increased (palms)',
     )
     expect(checklistSummary(undefined)).toBe('')
+  })
+})
+
+describe('complaint cards', () => {
+  it('trims fields and entries and drops empty ones and empty cards', () => {
+    expect(cleanDetail({ complaint: ' Head ', duration: '  ', aggravation: [' Sun ', '', 'sun', 'Noise'], amelioration: [' '] })).toEqual({ complaint: 'Head', aggravation: ['Sun', 'Noise'] })
+    expect(cleanDetails([{ complaint: ' ' }, { duration: '2 days' }, { aggravation: [] }, {}])).toEqual([{ duration: '2 days' }])
+    expect(cleanEntries(undefined)).toEqual([])
+  })
+
+  it('writes a summary line without dangling separators', () => {
+    expect(
+      complaintSummary({
+        complaint: 'Throbbing headache, right temple',
+        duration: '3 months',
+        aggravation: ['Sun', 'Noise', 'Damp weather'],
+        amelioration: ['Pressure'],
+      }),
+    ).toBe('Throbbing headache, right temple; since 3 months; < sun, noise, damp weather; > pressure')
+    expect(complaintSummary({ complaint: 'Knee pain', aggravation: ['Night'] })).toBe('Knee pain; < night')
+    expect(complaintSummary({ complaint: 'Cough' })).toBe('Cough')
+    expect(complaintSummary({ duration: '2 days', amelioration: ['Rest'] })).toBe('since 2 days; > rest')
+    expect(complaintSummary({ complaint: 'Fever', aggravation: ['AC room'] })).toBe('Fever; < AC room')
+    expect(complaintSummary({})).toBe('')
+  })
+
+  it('turns old complaint lines into cards', () => {
+    expect(detailsFromNotes({ complaints: ['Headache', 'Cough'] })).toEqual([{ complaint: 'Headache' }, { complaint: 'Cough' }])
+    expect(detailsFromNotes({ complaint: 'Cold\nFever' })).toEqual([{ complaint: 'Cold' }, { complaint: 'Fever' }])
+    expect(detailsFromNotes({ complaintDetails: [{ complaint: 'Knee' }], complaints: ['Knee'] })).toEqual([{ complaint: 'Knee' }])
+    expect(detailsFromNotes(undefined)).toEqual([])
+  })
+
+  it('adds and toggles entries case-insensitively', () => {
+    expect(addTerm(undefined, ' Sun ')).toEqual(['Sun'])
+    expect(addTerm(['Sun'], 'sun')).toEqual(['Sun'])
+    expect(addTerm(['Sun'], '  ')).toEqual(['Sun'])
+    expect(toggleTerm([], 'Sun')).toEqual(['Sun'])
+    expect(toggleTerm(['Sun'], 'Noise')).toEqual(['Sun', 'Noise'])
+    expect(toggleTerm(['sun', 'Noise'], 'Sun')).toEqual(['Noise'])
+    expect(hasTerm(['Cold', 'damp weather'], 'Damp weather')).toBe(true)
+    expect(hasTerm(['Cold'], 'Col')).toBe(false)
+    expect(hasTerm(undefined, 'Cold')).toBe(false)
+  })
+})
+
+describe('default generals', () => {
+  it('prefills every row at its normal option', () => {
+    expect(defaultGenerals()).toEqual({ appetite: 'normal', thirst: 'normal', urine: ['normal'], sleep: 'sound', stool: 'regular', sweat: 'normal' })
+    expect(cleanChecklist(defaultGenerals())).toEqual(defaultGenerals())
   })
 })
