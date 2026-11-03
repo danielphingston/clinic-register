@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { timeAgo } from '../../lib/format'
 import type { SyncStatus } from '../../sync/service'
 
+export const MIN_PASSPHRASE = 8
+export const FORGET_WARNING = 'If you forget this passphrase, your Drive backup cannot be recovered. Data on this device is not affected.'
+
 // Re-render every 30 s so "2 min ago" stays current.
 export function useNow(intervalMs = 30_000): number {
   const [now, setNow] = useState(Date.now)

@@ -7,6 +7,7 @@ import { NOTICES_KEY } from '../../sync/apply'
 import { syncService, useSyncStatus } from '../../sync/service'
 import type { RenumberNotice } from '../../sync/types'
 import { PassphraseForm } from './PassphraseForm'
+import { ResetBackup } from './ResetBackup'
 import { useNow } from './syncLabels'
 
 const NOTICE_LABEL: Record<RenumberNotice['table'], string> = { patients: 'Patient', bills: 'Bill', certificates: 'Certificate' }
@@ -77,11 +78,21 @@ function AuthBanner() {
 
 function PassphraseBanner() {
   const { phase } = useSyncStatus()
-  if (phase !== 'needs-passphrase') return null
+  const [reset, setReset] = useState(false)
+  if (phase !== 'needs-passphrase' && !reset) return null
   return (
     <div role="status" data-testid="passphrase-banner" className="rounded-md bg-amber-50 p-3 text-sm text-amber-900">
       <p>Your Drive backup is encrypted. Enter the passphrase to resume sync. This device keeps working meanwhile.</p>
-      <PassphraseForm />
+      {reset ? (
+        <ResetBackup onCancel={() => setReset(false)} onDone={() => setReset(false)} />
+      ) : (
+        <>
+          <PassphraseForm />
+          <button className="btn-ghost mt-2 px-0 text-sm underline" onClick={() => setReset(true)}>
+            Forgot the passphrase?
+          </button>
+        </>
+      )}
     </div>
   )
 }

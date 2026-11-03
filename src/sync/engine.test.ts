@@ -599,6 +599,58 @@ describe('encryption', () => {
     await eb.sync()
   })
 
+  it('a forgotten passphrase: replaces the Drive backup with this device, other devices merge back in', async () => {
+    const { drive, ea, hash } = await setup()
+    await ea.setEncryption('lost-pass')
+    const B = device('b')
+    const eb = engine(B, drive, 'B')
+    await eb.unlock('lost-pass')
+    await eb.sync()
+    await B.patients.add(patient(op(2), 'Only On B'))
+    await eb.sync()
+    // A third device has only its own data and no passphrase.
+    const C = device('c')
+    await C.patients.add(patient(op(3), 'Only On C'))
+    const ec = engine(C, drive, 'C')
+    await expect(ec.sync()).rejects.toBeInstanceOf(NeedPassphraseError)
+    const oldIds = new Set(drive.files.keys())
+    const oldManifestId = drive.byName(MANIFEST)[0].id
+
+    const m = await ec.resetRemote('new-pass-123')
+    expect(m.encrypted).toBe(true)
+    expect(drive.byName(MANIFEST)).toHaveLength(1)
+    // Every old file except the manifest (updated in place) is gone.
+    for (const id of oldIds) if (id !== oldManifestId) expect(drive.files.has(id)).toBe(false)
+    expect(driveText(drive)).not.toContain('Only On C')
+    expect(drive.byName(blobName(hash, 1))).toHaveLength(0)
+
+    const C2 = device('c2')
+    const ec2 = engine(C2, drive, 'C2')
+    expect(await ec2.unlock('lost-pass')).toBe(false)
+    expect(await ec2.unlock('new-pass-123')).toBe(true)
+    await ec2.sync()
+    expect(await names(C2)).toEqual(['Only On C'])
+
+    // B asks for the new passphrase, then pushes its records (and blob) back.
+    await expect(eb.sync()).rejects.toBeInstanceOf(NeedPassphraseError)
+    expect(await eb.unlock('new-pass-123')).toBe(true)
+    await eb.sync()
+    await ec.sync()
+    expect(await names(C)).toEqual(['Only On B', 'Only On C', 'Ramesh Secretname'])
+    expect(await ec.requestBlob(hash)).toBe(true)
+  })
+
+  it('resetRemote without a passphrase leaves an unencrypted backup', async () => {
+    const { drive, ea } = await setup()
+    await ea.setEncryption('lost-pass')
+    await ea.forgetKey()
+    const m = await ea.resetRemote(null)
+    expect(m.encrypted).toBe(false)
+    expect(m.kdf).toBeUndefined()
+    expect(driveText(drive)).toContain('Secretname')
+    await ea.sync()
+  })
+
   it('an interrupted re-upload leaves Drive consistent and readable, and a retry finishes', async () => {
     const { drive, ea, hash } = await setup()
     // Crash midway through uploading the new generation, with no chance to

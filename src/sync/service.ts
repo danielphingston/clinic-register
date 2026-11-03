@@ -322,6 +322,24 @@ export class SyncService {
     }
   }
 
+  // Forgotten passphrase: replaces the Drive backup with this device's data.
+  async resetRemote(passphrase: string | null): Promise<Manifest> {
+    const engine = this.getEngine()
+    if (!engine) throw new Error('Sync is not set up')
+    if (!(await this.ownerOk())) throw new Error('Local data belongs to another Google account.')
+    this.set({ phase: 'syncing', error: undefined, errorDetail: undefined })
+    try {
+      const m = await engine.resetRemote(passphrase)
+      this.set({ phase: 'idle', encrypted: m.encrypted, lastSyncAt: Date.now(), progress: undefined })
+      return m
+    } catch (e) {
+      this.fail(e)
+      throw e
+    } finally {
+      this.refreshPending()
+    }
+  }
+
   async forgetKey() {
     await this.getEngine()?.forgetKey()
     if (this.status.encrypted) this.set({ phase: 'needs-passphrase' })

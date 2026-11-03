@@ -750,6 +750,61 @@ export class SyncEngine {
     return newManifest
   }
 
+  // ---- replacing the Drive backup (forgotten passphrase) ----
+
+  // Discards everything on Drive and uploads this device's data in its
+  // place, optionally encrypted with a new passphrase. The old passphrase is
+  // not needed. The manifest is switched first (to an empty one under a new
+  // generation), so other devices never read a half-deleted set; then every
+  // old file is deleted and a normal sync pushes this device's tables and
+  // attachment files. Attachments this device never downloaded are lost.
+  resetRemote(passphrase: string | null): Promise<Manifest> {
+    return this.exclusive(async () => {
+      const { drive } = this
+      const now = this.now()
+      const files = await drive.list()
+      const { file: mFile, manifest } = await this.readCanonicalManifest(files)
+
+      let maxGen = manifest?.gen ?? 0
+      for (const f of files) {
+        const b = parseBlobName(f.name)
+        if (b) maxGen = Math.max(maxGen, b.gen)
+      }
+      const gen = maxGen + 1
+
+      let newKey: CryptoKey | null = null
+      let kdf: Manifest['kdf']
+      let keyCheck: string | undefined
+      if (passphrase !== null) {
+        kdf = newKdfParams(this.kdfIterations)
+        newKey = await deriveKey(passphrase, kdf)
+        keyCheck = await makeKeyCheck(newKey)
+      }
+      const empty: Manifest = {
+        schema: SCHEMA,
+        appVersion: this.appVersion,
+        encrypted: !!newKey,
+        gen,
+        ...(newKey ? { kdf, keyCheck } : {}),
+        tables: {},
+        lastWriter: { deviceId: this.deviceId, deviceName: this.deviceName(), at: now },
+      }
+      await this.writeManifest(mFile, empty)
+
+      if (newKey && kdf) await this.storeKey(newKey, kdf.salt)
+      else await this.forgetKey()
+      await this.setState({ seen: {}, gen })
+      this.manifest = empty
+      this.listing = null
+      this.blobFailed.clear()
+
+      for (const f of files) if (f.id !== mFile?.id) await drive.remove(f.id)
+
+      // Every table is now missing from the manifest, so all local data is pushed.
+      return (await this.syncWithRetry()).manifest
+    })
+  }
+
   // ---- local erase (switching Google accounts) ----
 
   async eraseLocal(): Promise<void> {

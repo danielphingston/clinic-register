@@ -53,6 +53,12 @@ Each device must sign in with the same Google account. If two devices change the
 
 > **Warning:** if the passphrase is forgotten, the Drive copy cannot be recovered. Devices that still hold the data locally are not affected.
 
+**Forgot the passphrase?** Use **Forgot the passphrase?** in the passphrase banner (or **Forgot passphrase? Replace Drive backup** in Settings). This deletes the encrypted Drive copy and uploads the data on this device in its place, optionally with a new passphrase. Other devices then ask for the new passphrase and merge their own data back in. Records that existed only in the old Drive copy, and attachment files this device never downloaded, are lost. Do this on the device with the most complete data.
+
+### Where the backup lives on Drive
+
+The app stores its files in Google Drive's hidden **app data** folder (it only has the `drive.appdata` permission). They do not appear in **My Drive** and cannot be opened directly. To see that the app holds data, or to delete it all, open drive.google.com → **Settings** (gear) → **Manage apps** → the app (the name on your Google OAuth consent screen) → **Options** → **Delete hidden app data**. Use **Download a backup file** for a copy you can open yourself.
+
 ## Backups
 
 Drive sync acts as a continuous backup. In addition:

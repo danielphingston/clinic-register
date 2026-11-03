@@ -7,10 +7,9 @@ import { SYNC_KEY_KV } from '../../sync/engine'
 import { exportBackup, importBackup } from '../../sync/backup'
 import { getDeviceName, setDeviceName } from '../../sync/device'
 import { syncService, useSyncStatus } from '../../sync/service'
-import { chipLabel, useNow } from './syncLabels'
+import { ResetBackup } from './ResetBackup'
+import { chipLabel, FORGET_WARNING, MIN_PASSPHRASE, useNow } from './syncLabels'
 
-export const MIN_PASSPHRASE = 8
-export const FORGET_WARNING = 'If you forget this passphrase, your Drive backup cannot be recovered. Data on this device is not affected.'
 
 export function SyncSettings() {
   const { profile } = useAuth()
@@ -83,7 +82,7 @@ function DeviceName() {
   )
 }
 
-type EncMode = null | 'enable' | 'change' | 'disable'
+type EncMode = null | 'enable' | 'change' | 'disable' | 'reset'
 
 function Encryption() {
   const status = useSyncStatus()
@@ -142,6 +141,11 @@ function Encryption() {
                   Forget key on this device
                 </button>
               )}
+              {status.phase === 'needs-passphrase' && (
+                <button className="btn-ghost border border-red-300 text-red-700" onClick={() => setMode('reset')}>
+                  Forgot passphrase? Replace Drive backup
+                </button>
+              )}
             </>
           )}
         </div>
@@ -153,6 +157,15 @@ function Encryption() {
           onDone={() => {
             setMode(null)
             setMessage(mode === 'enable' ? 'Encryption is on. Drive files were re-uploaded encrypted.' : 'Passphrase changed.')
+          }}
+        />
+      )}
+      {mode === 'reset' && (
+        <ResetBackup
+          onCancel={() => setMode(null)}
+          onDone={() => {
+            setMode(null)
+            setMessage("The Drive backup was replaced with this device's data.")
           }}
         />
       )}
