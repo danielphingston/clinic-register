@@ -7,10 +7,9 @@ import { SYNC_KEY_KV } from '../../sync/engine'
 import { exportBackup, importBackup } from '../../sync/backup'
 import { getDeviceName, setDeviceName } from '../../sync/device'
 import { syncService, useSyncStatus } from '../../sync/service'
-import { chipLabel, useNow } from './syncLabels'
+import { ResetBackup } from './ResetBackup'
+import { chipLabel, FORGET_WARNING, MIN_PASSPHRASE, useNow } from './syncLabels'
 
-export const MIN_PASSPHRASE = 8
-export const FORGET_WARNING = 'If you forget this passphrase, your Drive backup cannot be recovered. Data on this device is not affected.'
 
 export function SyncSettings() {
   const { profile } = useAuth()
@@ -83,7 +82,7 @@ function DeviceName() {
   )
 }
 
-type EncMode = null | 'enable' | 'change' | 'disable'
+type EncMode = null | 'enable' | 'change' | 'disable' | 'reset'
 
 function Encryption() {
   const status = useSyncStatus()
@@ -142,6 +141,11 @@ function Encryption() {
                   Forget key on this device
                 </button>
               )}
+              {status.phase === 'needs-passphrase' && (
+                <button className="btn-ghost border border-red-300 text-red-700" onClick={() => setMode('reset')}>
+                  Forgot passphrase? Replace Drive backup
+                </button>
+              )}
             </>
           )}
         </div>
@@ -153,6 +157,15 @@ function Encryption() {
           onDone={() => {
             setMode(null)
             setMessage(mode === 'enable' ? 'Encryption is on. Drive files were re-uploaded encrypted.' : 'Passphrase changed.')
+          }}
+        />
+      )}
+      {mode === 'reset' && (
+        <ResetBackup
+          onCancel={() => setMode(null)}
+          onDone={() => {
+            setMode(null)
+            setMessage("The Drive backup was replaced with this device's data.")
           }}
         />
       )}
@@ -175,6 +188,8 @@ function PassphraseSetup({ mode, onCancel, onDone }: { mode: 'enable' | 'change'
   const [ack, setAck] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  // Turning encryption on asks once more, spelling out what can go wrong.
+  const [confirming, setConfirming] = useState(false)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -182,6 +197,7 @@ function PassphraseSetup({ mode, onCancel, onDone }: { mode: 'enable' | 'change'
     if (p1 !== p2) return setError('The passphrases do not match')
     if (!ack) return setError('Tick "I understand" to continue')
     setError('')
+    if (mode === 'enable' && !confirming) return setConfirming(true)
     setBusy(true)
     try {
       await syncService.setEncryption(p1)
@@ -191,6 +207,37 @@ function PassphraseSetup({ mode, onCancel, onDone }: { mode: 'enable' | 'change'
     } finally {
       setBusy(false)
     }
+  }
+
+  if (confirming) {
+    return (
+      <form onSubmit={submit} className="space-y-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900" data-testid="encryption-confirm">
+        <p className="font-medium">Are you sure you want to encrypt the Drive backup?</p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>Nobody, including Google or the app's developer, can reset or recover this passphrase.</li>
+          <li>
+            If it is forgotten, the Drive backup cannot be opened. A new device or a reinstalled browser will not be able to
+            restore your clinic data from Drive.
+          </li>
+          <li>The only way back is to delete the Drive backup and upload a device's data again; anything that device lacks is lost.</li>
+          <li>Every other device will ask for the passphrase before it can sync again.</li>
+        </ul>
+        <p>Write the passphrase down and keep it somewhere safe, and keep a backup file outside Drive.</p>
+        {error && (
+          <p role="alert" className="text-red-700">
+            {error}
+          </p>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <button type="submit" className="btn bg-red-600 text-white hover:bg-red-700" disabled={busy}>
+            {busy ? 'Re-uploading…' : 'Yes, encrypt my Drive backup'}
+          </button>
+          <button type="button" className="btn-ghost" onClick={() => setConfirming(false)} disabled={busy}>
+            Back
+          </button>
+        </div>
+      </form>
+    )
   }
 
   return (

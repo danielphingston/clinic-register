@@ -17,6 +17,7 @@
   - `data-<table>.json`: a new file on every push. The manifest names the current one, and superseded copies are swept after an hour.
   - `blob-<sha256>`: attachments, with a `.g<N>` suffix after an encryption change.
   - `lock.json`
+- **Replacing the backup** (`SyncEngine.resetRemote`, for a forgotten passphrase): overwrites the manifest in place with an empty one under a new generation (and new key, if any), deletes every other old file, then runs a normal sync that pushes all local tables and blobs. Other devices see the generation change, pull the (smaller) set and push their own records back.
 - **Change tracking**: Dexie hooks on every synced table, and on the `settings` key-value entry, bump counters in localStorage. Sync's own writes run in transactions tagged `SYNC_APPLY` and are not counted. A write that bypassed Dexie would not be synced.
 - **What syncs**: of the key-value entries, only `settings`. Counters (`seq:*`), `sync:*` state, the cached key and `sync:owner` stay on each device. After a pull, counters are raised to the highest number in the data, and the newer of two records sharing an OP or bill number is renumbered, with a visible notice.
 - **Mock Drive**: when `VITE_DRIVE_API_BASE` is a `localhost` or `127.0.0.1` URL (`isMockDrive()` in `src/sync/drive.ts`), `getToken()` returns a dummy token. This can never trigger against googleapis.com.
