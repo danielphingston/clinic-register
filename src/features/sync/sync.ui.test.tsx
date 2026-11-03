@@ -231,6 +231,14 @@ describe('sync UI', () => {
 
     await user.click(within(form).getByLabelText('I understand'))
     await user.click(submit)
+    // A second confirmation spells out the dangers; Back returns to the form.
+    let confirm = within(section).getByTestId('encryption-confirm')
+    expect(confirm).toHaveTextContent('can reset or recover this passphrase')
+    expect(JSON.parse(drive.text(MANIFEST)).encrypted).toBe(false)
+    await user.click(within(confirm).getByRole('button', { name: 'Back' }))
+    await user.click(within(within(section).getByTestId('passphrase-setup')).getByRole('button', { name: 'Turn on encryption' }))
+    confirm = within(section).getByTestId('encryption-confirm')
+    await user.click(within(confirm).getByRole('button', { name: 'Yes, encrypt my Drive backup' }))
     expect(await within(section).findByText(/Encryption is on/)).toBeInTheDocument()
     expect(within(section).getByTestId('encryption-state')).toHaveTextContent('encrypted')
     expect(JSON.parse(drive.text(MANIFEST)).encrypted).toBe(true)
