@@ -36,7 +36,11 @@ export function OpNumberSettings({
   useEffect(() => {
     if (error) return setPeek(null)
     let live = true
-    void peekOpNumber(new Date(), format).then((p) => live && setPeek(p.n))
+    // Only a preview: if the read fails (e.g. the database closed while it ran), show none.
+    peekOpNumber(new Date(), format).then(
+      (p) => live && setPeek(p.n),
+      () => live && setPeek(null),
+    )
     return () => {
       live = false
     }
