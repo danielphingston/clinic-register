@@ -169,6 +169,10 @@ describe('deleteVisit', () => {
 
   it('treats a same-date visit created later as a follow-up', async () => {
     const { p, id } = await setup()
+    // Saved a second later: back-to-back saves can share a millisecond, and
+    // then neither visit counts as the later one.
+    const created = (await db.visits.get(id))!.createdAt
+    vi.spyOn(Date, 'now').mockReturnValue(created + 1000)
     await saveVisit({ patientId: p.id, date: '2026-09-01', caseNotes: {}, items: [] })
     expect(await visitDeleteBlockers(id)).toHaveLength(1)
   })
