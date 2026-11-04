@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { db } from '../../db/db'
 import type { PrescriptionItem } from '../../db/types'
 import { ageSex } from '../../lib/age'
-import { formatDate, todayISO } from '../../lib/format'
+import { formatDate, toISODate, todayISO } from '../../lib/format'
 import { remedyMap } from '../remedies/remedyRepo'
 import { rxDetails } from '../visits/rxFormat'
 import { byRxOrder, visitsForPatient } from '../visits/visitRepo'
@@ -54,6 +54,17 @@ export function PatientProfile() {
           <div>
             <h1 className="text-2xl font-semibold">{patient.name}</h1>
             <p className="font-mono text-sm text-slate-500">{patient.opNo}</p>
+            {patient.opNoHistory?.length ? (
+              <ul className="text-xs text-slate-500" aria-label="OP number changes">
+                {patient.opNoHistory.map((c) => (
+                  <li key={c.at + c.from}>
+                    OP no changed from <span className="font-mono">{c.from}</span> to <span className="font-mono">{c.to}</span> on{' '}
+                    {formatDate(toISODate(new Date(c.at)))}
+                    {c.reason === 'sync' ? ' (another device had used the same number)' : ' (edited)'}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             <p className="mt-1 text-sm text-slate-700">
               {[ageSex(patient, todayISO()), patient.phone, patient.dob && `DOB ${formatDate(patient.dob)}`]
                 .filter(Boolean)

@@ -15,6 +15,8 @@ import { BrandingSettings } from './BrandingSettings'
 import { WhatsAppTemplatesEditor } from './WhatsAppTemplatesEditor'
 import { PlaceholderTextarea } from './PlaceholderTextarea'
 import { DUE_TOKENS } from '../../lib/whatsapp'
+import { opScope, validateOpFormat } from '../../lib/opFormat'
+import { OpNumberSettings } from './OpNumberSettings'
 
 const FIELDS: { key: keyof ClinicSettings; label: string; multiline?: boolean }[] = [
   { key: 'clinicName', label: 'Clinic name' },
@@ -24,7 +26,6 @@ const FIELDS: { key: keyof ClinicSettings; label: string; multiline?: boolean }[
   { key: 'phone', label: 'Phone' },
   { key: 'email', label: 'Email' },
   { key: 'address', label: 'Address', multiline: true },
-  { key: 'opPrefix', label: 'OP number prefix' },
 ]
 
 // Sections shown one at a time; the active one lives in ?tab= so it survives reloads.
@@ -153,6 +154,8 @@ export function Settings() {
   const [form, setForm] = useState<ClinicSettings | null>(null)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+  const [opNextN, setOpNextN] = useState('')
+  const [savedVersion, setSavedVersion] = useState(0)
 
   useEffect(() => {
     getSettings().then(setForm)
@@ -182,6 +185,12 @@ export function Settings() {
       showTab(id)
       setError(message)
     }
+    const opFormat = form.opFormat.trim()
+    const opError = validateOpFormat(opFormat)
+    if (opError) return fail('clinic', `OP number format: ${opError}`)
+    const nextN = opNextN.trim()
+    if (nextN && !(/^\d+$/.test(nextN) && Number(nextN) >= 1 && Number(nextN) <= 1e9))
+      return fail('clinic', 'Next OP number must be a whole number of 1 or more')
     const sessionError = validateSessions(form.sessions)
     if (sessionError) return fail('hours', sessionError)
     if (!(form.slotMinutes >= 5 && form.slotMinutes <= 120)) return fail('hours', 'Slot length must be 5–120 minutes')
@@ -199,11 +208,14 @@ export function Settings() {
     setError('')
     const normalized = {
       ...form,
-      opPrefix: form.opPrefix.trim() || 'OP',
+      opFormat,
+      opNextFloor: nextN ? { scope: opScope(opFormat, new Date()), n: Number(nextN) } : form.opNextFloor,
       sessions: [...form.sessions].sort((a, b) => a.start.localeCompare(b.start)),
     }
     await saveSettings(normalized)
     setForm(normalized)
+    setOpNextN('')
+    setSavedVersion((v) => v + 1)
     setSaved(true)
   }
 
@@ -263,6 +275,17 @@ export function Settings() {
             </div>
           ))}
         </div>
+
+        <OpNumberSettings
+          format={form.opFormat}
+          onFormat={(v) => set('opFormat', v)}
+          nextN={opNextN}
+          onNextN={(v) => {
+            setOpNextN(v)
+            setSaved(false)
+          }}
+          version={savedVersion}
+        />
 
         <div className="max-w-md">
           <label className="label" htmlFor="letterheadStyle">

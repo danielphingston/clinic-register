@@ -158,8 +158,13 @@ describe('patients UI', () => {
     expect(await screen.findByText('OP no is required')).toBeInTheDocument()
     await user.type(edit, 'REG-102')
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
-    expect(await screen.findByText('REG-102')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Asha' })).toBeInTheDocument()
+    // The change is traced on the profile and the record.
+    expect(await screen.findByRole('list', { name: 'OP number changes' })).toHaveTextContent('OP no changed from REG-101 to REG-102')
     expect((await db.patients.toArray()).map((p) => p.opNo).sort()).toEqual([other.opNo, 'REG-102'].sort())
+    const asha = (await db.patients.toArray()).find((p) => p.name === 'Asha')!
+    expect(asha.opDeviceId).toBeTruthy()
+    expect(asha.opNoHistory).toEqual([expect.objectContaining({ from: 'REG-101', to: 'REG-102', reason: 'edit' })])
   })
 })
 

@@ -4,6 +4,8 @@ import { db } from '../../db/db'
 import type { Patient, Sex } from '../../db/types'
 import { ageFromDob, currentAge, dobFromAge } from '../../lib/age'
 import { todayISO } from '../../lib/format'
+import { peekOpNumber } from '../../db/repo'
+import { renderOpNo } from '../../lib/opFormat'
 import { createPatient, deletePatient, normalizeIndianMobile, opNoHolder, updatePatient } from './patientRepo'
 
 interface FormState {
@@ -46,6 +48,18 @@ function PatientFormInner() {
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({})
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [saving, setSaving] = useState(false)
+  // The number a new patient will get if the field is left blank.
+  const [nextOp, setNextOp] = useState('')
+
+  useEffect(() => {
+    if (id) return
+    let live = true
+    const now = new Date()
+    void peekOpNumber(now).then((p) => live && setNextOp(renderOpNo(p.format, now, p.n)))
+    return () => {
+      live = false
+    }
+  }, [id])
   const today = todayISO()
 
   useEffect(() => {
@@ -166,7 +180,7 @@ function PatientFormInner() {
               aria-invalid={errors.opNo ? true : undefined}
               aria-describedby={errors.opNo ? 'p-opNo-error' : id ? undefined : 'p-opNo-hint'}
               className="input font-mono"
-              placeholder={id ? undefined : 'Automatic'}
+              placeholder={id ? undefined : nextOp || 'Automatic'}
               value={form.opNo}
               onChange={(e) => set('opNo', e.target.value)}
             />
@@ -177,7 +191,7 @@ function PatientFormInner() {
             ) : (
               !id && (
                 <p id="p-opNo-hint" className="mt-1 text-xs text-slate-500">
-                  Leave blank for the next number
+                  {nextOp ? `Leave blank to use ${nextOp}` : 'Leave blank for the next number'}
                 </p>
               )
             )}

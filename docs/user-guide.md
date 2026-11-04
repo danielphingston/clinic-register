@@ -21,6 +21,23 @@
 - **Diagnosis**: record one or more diagnoses per patient. Type one and press Enter, and remove one with the × on its chip. Diagnoses used for other patients are suggested as you type.
 - **WhatsApp**: choose a message template and press **Send WhatsApp**. WhatsApp opens with the message filled in, and you review it and press Send yourself. The patient needs a valid Indian mobile number.
 
+## OP numbers
+
+New patients are numbered automatically using the format under **Settings → Clinic → OP numbers**. Click the tags to build a format. Hover over a tag (or tab to it) to see what it means, or click **Show examples** for a table and some ready-made formats.
+
+| Format | Example | Restarts |
+|---|---|---|
+| `OP-{YYYY}-{N:5}` (default) | `OP-2026-00183` | every year |
+| `{YY}{N:4}` | `260183` | every year |
+| `{YY}{MM}{N:3}` | `2611183` | every month |
+| `{N}` | `183` | never |
+
+`{N}` is the running number and must appear once. `{N:4}` pads it with zeros to 4 digits. Any other text, or none, is printed as it is.
+
+The next number is one after the highest number already used in the current year (or month), on any device. To carry on from a paper register, enter the next number in **Next OP number**, e.g. 184. Changing the format doesn't change existing patients' numbers.
+
+If two devices give out the same number while offline, the patient created later is renumbered at the next sync. A banner shows the change with a link to reprint the OP slip. Every change to a patient's OP number, by hand or by sync, is listed under the number on the patient page.
+
 ## WhatsApp templates
 
 Manage templates under **Settings → WhatsApp**. Each template has a name and a message. Click a placeholder button to insert it at the cursor. When the message is sent, each placeholder is replaced:
@@ -45,7 +62,7 @@ Every change is saved on the device first. When online, the app syncs to Google 
 - when the device comes back online;
 - when you press **Sync now** (the chip in the header).
 
-Each device must sign in with the same Google account. If two devices change the same record, the newer edit wins. Duplicate OP or bill numbers are renumbered with a notice. A banner warns you if another device was active in the last few minutes.
+Each device must sign in with the same Google account. If two devices change the same record, the newer edit wins. Duplicate OP or bill numbers are renumbered with a notice (see [OP numbers](#op-numbers)). A banner warns you if another device was active in the last few minutes.
 
 ## Encryption
 

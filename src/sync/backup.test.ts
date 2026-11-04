@@ -47,7 +47,6 @@ describe('JSON backup', () => {
     expect(res.written).toBeGreaterThan(0)
     expect((await d.patients.get(p.id))?.name).toBe('Asha')
     expect(await d.bills.get(bill.id)).toMatchObject({ paid: 100, balance: 200 })
-    expect((await d.kv.get(`seq:op:${YEAR}`))?.value).toBe(3)
     expect((await d.kv.get(`seq:rcpt:${YEAR}`))?.value).toBe(4)
     expect(((await d.kv.get('settings'))?.value as { clinicName: string }).clinicName).toBe('Sunrise')
     // Attachment metadata comes along; the file doesn't.

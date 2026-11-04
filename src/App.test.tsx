@@ -111,20 +111,18 @@ describe('signed-in app', () => {
     await waitFor(() => expect(label.nextElementSibling).toHaveTextContent('1'))
   })
 
-  it('saves clinic settings and defaults an empty OP prefix to "OP"', async () => {
+  it('saves clinic settings with the default OP number format', async () => {
     signedIn()
     goTo('/settings')
     render(<App />)
 
     await userEvent.type(await screen.findByLabelText('Clinic name'), 'Sunrise Homeo Clinic')
-    await userEvent.clear(screen.getByLabelText('OP number prefix'))
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(await screen.findByText('Saved')).toBeInTheDocument()
     const s = await getSettings()
     expect(s.clinicName).toBe('Sunrise Homeo Clinic')
-    expect(s.opPrefix).toBe('OP')
-    expect(screen.getByLabelText('OP number prefix')).toHaveValue('OP')
+    expect(s.opFormat).toBe('OP-{YYYY}-{N:5}')
   })
 
   it('signs out to the sign-in screen but keeps local data', async () => {

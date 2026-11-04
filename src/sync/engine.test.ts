@@ -183,7 +183,7 @@ describe('two-device sync', () => {
     const newer = patient(op(5), 'Newer', { createdAt: 2000, updatedAt: 2000 })
     await A.patients.add(older)
     await B.patients.add(newer)
-    await B.kv.put({ key: `seq:op:${YEAR}`, value: 5, updatedAt: 1 })
+    await B.kv.put({ key: `seq:op:OP-${YEAR}-{N:5}`, value: 5, updatedAt: 1 })
 
     await ea.sync()
     const rb = await eb.sync()
@@ -199,7 +199,13 @@ describe('two-device sync', () => {
     const notices = (await B.kv.get(NOTICES_KEY))?.value as RenumberNotice[]
     expect(notices).toHaveLength(1)
     // The counter moved past the new number.
-    expect((await B.kv.get(`seq:op:${YEAR}`))?.value).toBe(6)
+    expect((await B.kv.get(`seq:op:OP-${YEAR}-{N:5}`))?.value).toBe(6)
+    // The change is traced on the patient, on every device.
+    for (const d of [A, B]) {
+      const p = await d.patients.get(newer.id)
+      expect(p?.opNoHistory).toEqual([expect.objectContaining({ from: op(5), to: op(6), reason: 'sync', deviceId: 'B' })])
+      expect((await d.patients.get(older.id))?.opNoHistory).toBeUndefined()
+    }
   })
 
   it('renumbers duplicate bill numbers too', async () => {

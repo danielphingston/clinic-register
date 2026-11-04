@@ -20,6 +20,20 @@ export interface Patient extends BaseRecord {
   address?: string
   notes?: string
   diagnoses?: string[] // absent on records created before the field existed
+  // The device that gave out the OP number automatically (its sync device id).
+  // Not shown; kept so numbers can be traced to a PC if ever needed.
+  opDeviceId?: string
+  // Every change to the OP number after it was first given, oldest first.
+  opNoHistory?: OpNoChange[]
+}
+
+export interface OpNoChange {
+  from: string
+  to: string
+  at: number
+  // 'edit': changed by hand; 'sync': renumbered because another device used the same number.
+  reason: 'edit' | 'sync'
+  deviceId: string
 }
 
 export type Level = 'increased' | 'decreased' | 'normal'
@@ -252,7 +266,11 @@ export interface ClinicSettings {
   address: string
   phone: string
   email: string
-  opPrefix: string
+  // Template for new OP numbers, e.g. 'OP-{YYYY}-{N:5}' or '{YY}{N:4}'; see lib/opFormat.
+  opFormat: string
+  // "Next OP number" set by hand (e.g. carrying on from a paper register).
+  // Applies only while the number's scope (see opScope) is unchanged.
+  opNextFloor?: { scope: string; n: number }
   whatsappDueTemplate: string
   // Absent on data saved before templates existed; getSettings fills the defaults.
   whatsappTemplates?: WhatsAppTemplate[]

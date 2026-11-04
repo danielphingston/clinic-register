@@ -403,7 +403,7 @@ export class SyncEngine {
           throw e
         }
       }
-      const r = await applyRecords(db, t, records, { tag: true, now, touched, notices })
+      const r = await applyRecords(db, t, records, { tag: true, now, touched, notices, deviceId: this.deviceId })
       if (r.localNewer) pushNeeded.add(t)
       pulled.push(t)
       this.progress('tables', ++done, sources.size)

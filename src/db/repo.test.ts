@@ -4,13 +4,44 @@ import { getSettings, insert, nextOpNo, saveSettings, softDelete, update } from 
 import type { Patient } from './types'
 
 describe('repo', () => {
-  it('generates sequential OP numbers with the configured prefix', async () => {
+  it('generates sequential OP numbers in the configured format', async () => {
     const year = new Date().getFullYear()
+    const yy = String(year % 100).padStart(2, '0')
     expect(await nextOpNo()).toBe(`OP-${year}-00001`)
     expect(await nextOpNo()).toBe(`OP-${year}-00002`)
 
-    await saveSettings({ ...(await getSettings()), opPrefix: 'HC' })
-    expect(await nextOpNo()).toBe(`HC-${year}-00003`)
+    await saveSettings({ ...(await getSettings()), opFormat: 'HC-{YYYY}-{N:5}' })
+    expect(await nextOpNo()).toBe(`HC-${year}-00001`)
+
+    // No prefix at all: the 183rd case of the year.
+    await saveSettings({ ...(await getSettings()), opFormat: '{YY}{N:4}' })
+    expect(await nextOpNo()).toBe(`${yy}0001`)
+  })
+
+  it('carries on from the last patient number, whichever device made it', async () => {
+    const yy = String(new Date().getFullYear() % 100).padStart(2, '0')
+    await saveSettings({ ...(await getSettings()), opFormat: '{YY}{N:4}' })
+    await insert<Patient>(db.patients, { opNo: `${yy}0183`, name: 'Asha' })
+    await insert<Patient>(db.patients, { opNo: `${Number(yy) - 1}0500`, name: 'Last year' })
+    expect(await nextOpNo()).toBe(`${yy}0184`)
+  })
+
+  it('honours the "Next OP number" setting only in its scope and only upward', async () => {
+    const yy = String(new Date().getFullYear() % 100).padStart(2, '0')
+    await saveSettings({ ...(await getSettings()), opFormat: '{YY}{N:4}', opNextFloor: { scope: `${yy}{N:4}`, n: 184 } })
+    expect(await nextOpNo()).toBe(`${yy}0184`)
+    expect(await nextOpNo()).toBe(`${yy}0185`)
+    await saveSettings({ ...(await getSettings()), opNextFloor: { scope: `${yy}{N:4}`, n: 10 } })
+    expect(await nextOpNo()).toBe(`${yy}0186`)
+    await saveSettings({ ...(await getSettings()), opNextFloor: { scope: `00{N:4}`, n: 900 } })
+    expect(await nextOpNo()).toBe(`${yy}0187`)
+  })
+
+  it('reads settings saved with the old OP prefix as a format', async () => {
+    await db.kv.put({ key: 'settings', value: { opPrefix: 'HC' }, updatedAt: 1 })
+    const s = await getSettings()
+    expect(s.opFormat).toBe('HC-{YYYY}-{N:5}')
+    expect('opPrefix' in s).toBe(false)
   })
 
   it('does not hand out duplicate OP numbers under concurrency', async () => {

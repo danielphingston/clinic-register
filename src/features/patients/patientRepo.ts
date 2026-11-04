@@ -1,11 +1,14 @@
 import { db } from '../../db/db'
 import { insert, nextOpNo, softDelete, update } from '../../db/repo'
-import type { Patient } from '../../db/types'
+import type { OpNoChange, Patient } from '../../db/types'
+import { getDeviceId } from '../../sync/device'
 import { todayISO } from '../../lib/format'
 
 // opNo is optional: left blank, a new patient gets the next number in sequence
 // and an edited one keeps the number it has.
-export type PatientInput = Omit<Patient, 'id' | 'createdAt' | 'updatedAt' | 'deleted' | 'opNo'> & { opNo?: string }
+export type PatientInput = Omit<Patient, 'id' | 'createdAt' | 'updatedAt' | 'deleted' | 'opNo' | 'opDeviceId' | 'opNoHistory'> & {
+  opNo?: string
+}
 
 // Accepts "98765 43210", "+91 98765-43210" or "098765..." and returns the bare
 // 10-digit number, or null if it isn't a valid Indian mobile number.
@@ -74,7 +77,7 @@ export async function createPatient(input: PatientInput): Promise<Patient> {
   const entered = input.opNo?.trim()
   if (entered) await assertOpNoFree(entered)
   const opNo = entered || (await autoOpNo())
-  return insert<Patient>(db.patients, { ...clean(input), opNo })
+  return insert<Patient>(db.patients, { ...clean(input), opNo, opDeviceId: getDeviceId() })
 }
 
 export async function updatePatient(id: string, input: PatientInput): Promise<void> {
@@ -84,6 +87,11 @@ export async function updatePatient(id: string, input: PatientInput): Promise<vo
   if (opNo) {
     await assertOpNoFree(opNo, id)
     c.opNo = opNo
+    const before = await db.patients.get(id)
+    if (before && before.opNo !== opNo) {
+      const change: OpNoChange = { from: before.opNo, to: opNo, at: Date.now(), reason: 'edit', deviceId: getDeviceId() }
+      c.opNoHistory = [...(before.opNoHistory ?? []), change]
+    }
   }
   // Explicit undefined clears fields the user emptied.
   await update<Patient>(db.patients, id, {
