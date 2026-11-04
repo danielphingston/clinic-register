@@ -16,19 +16,17 @@ npm run build
 
 Every pull request must include the following.
 
-### 1. Screenshots of every UI change
+### 1. Screenshots
 
-- Take screenshots of each screen or state the change affects (e.g. empty, filled, error, hover, mobile). Take at least one at phone width (Playwright `devices['iPhone 13']`) when the layout is responsive.
-- Use Playwright against `VITE_GOOGLE_CLIENT_ID=x npx vite --port 5199`, at `deviceScaleFactor: 2`.
+Never commit screenshots or other images made for a PR to the repository. GitHub has no API for attaching images to a PR, so PRs carry no screenshots.
+
+- Still take screenshots of every UI change, to check it yourself before opening the PR (e.g. empty, filled, error, hover, and phone width with Playwright `devices['iPhone 13']`).
+  - Use Playwright against `VITE_GOOGLE_CLIENT_ID=x npx vite --port 5199`.
   - To skip sign-in, set `localStorage['auth:profile']` to `{"sub":"1","email":"d@x.com","name":"D"}`, reload, and click **Continue without restoring** if it appears.
   - To seed demo data, use `page.evaluate(async () => { const { db } = await import('/src/db/db.ts'); ... })`. This uses the same module instance as the app.
   - Element screenshots on long pages can catch the sticky header. Scroll the element below the header and take a viewport screenshot instead.
-- Look at every image before using it.
-- Commit the images to `docs/pr-screenshots/<short-feature-name>/`, numbered in reading order (`1-…png`, `2-…png`).
-- In the PR body's **Screenshots** section, list each image by its repository path (e.g. `docs/pr-screenshots/<feature>/1-settings.png`) with a one-line caption. Reviewers see the images in the PR's *Files changed* tab.
-  - Don't embed them with `![…](…)` or `<img>`. Claude's GitHub tool rewrites image links in PR bodies into plain text, so they never render.
-  - The repository owner can embed them by hand when editing the PR on github.com if they want them inline.
-- If there is no visible change, say so in a **Screenshots** section instead of leaving the section out.
+  - Save them in the scratchpad, never in the repository, and look at every image.
+- In the PR body, add a **Screenshots** section. Say what changed on screen in a few lines, or that there is no visible change.
 
 ### 2. The tests added or changed
 
