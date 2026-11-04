@@ -55,7 +55,11 @@ function PatientFormInner() {
     if (id) return
     let live = true
     const now = new Date()
-    void peekOpNumber(now).then((p) => live && setNextOp(renderOpNo(p.format, now, p.n)))
+    // Only a hint: if the read fails (e.g. the database closed while it ran), show none.
+    peekOpNumber(now).then(
+      (p) => live && setNextOp(renderOpNo(p.format, now, p.n)),
+      () => {},
+    )
     return () => {
       live = false
     }
