@@ -25,9 +25,9 @@ Every pull request must include the following.
   - Element screenshots on long pages can catch the sticky header. Scroll the element below the header and take a viewport screenshot instead.
 - Look at every image before using it.
 - Commit the images to `docs/pr-screenshots/<short-feature-name>/`, numbered in reading order (`1-…png`, `2-…png`).
-- Embed them in the PR body with
-  `![caption](https://github.com/danielphingston/clinic-register/blob/<branch>/docs/pr-screenshots/<feature>/<file>.png?raw=true)`.
-  This form renders for private repositories too.
+- In the PR body's **Screenshots** section, list each image by its repository path (e.g. `docs/pr-screenshots/<feature>/1-settings.png`) with a one-line caption. Reviewers see the images in the PR's *Files changed* tab.
+  - Don't embed them with `![…](…)` or `<img>`. Claude's GitHub tool rewrites image links in PR bodies into plain text, so they never render.
+  - The repository owner can embed them by hand when editing the PR on github.com if they want them inline.
 - If there is no visible change, say so in a **Screenshots** section instead of leaving the section out.
 
 ### 2. The tests added or changed
