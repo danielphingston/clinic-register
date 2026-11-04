@@ -1,5 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
 import { db } from '../../db/db'
 import { timeAgo } from '../../lib/format'
@@ -108,6 +109,18 @@ function NoticesBanner() {
         {notices.slice(-5).map((n) => (
           <li key={`${n.id}-${n.at}`}>
             {NOTICE_LABEL[n.table]} {n.from} → <span className="font-medium">{n.to}</span>
+            {n.table === 'patients' && (
+              <>
+                {' '}
+                <Link className="underline" to={`/patients/${n.id}`}>
+                  Open
+                </Link>{' '}
+                ·{' '}
+                <Link className="underline" to={`/print/op-slip/${n.id}`}>
+                  Reprint OP slip
+                </Link>
+              </>
+            )}
           </li>
         ))}
       </ul>

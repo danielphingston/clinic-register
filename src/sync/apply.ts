@@ -1,8 +1,9 @@
 import type { Table } from 'dexie'
 import type { ClinicDB } from '../db/db'
-import type { BaseRecord, Bill, Certificate, KV, Patient, Payment, StockItem, StockMove } from '../db/types'
+import type { BaseRecord, Bill, Certificate, ClinicSettings, KV, OpNoChange, Payment, StockItem, StockMove } from '../db/types'
 import { roundQty } from '../features/stock/stockLogic'
 import { toISODate, todayISO } from '../lib/format'
+import { opFormatOf, splitOpNo } from '../lib/opFormat'
 import { diffMerge, type SyncRecord } from './merge'
 import { SYNC_APPLY, SYNCED_KV_KEYS } from './tracking'
 import type { RenumberNotice, SyncTableName } from './types'
@@ -28,6 +29,8 @@ export interface ApplyOptions {
   now: number
   touched: Touched
   notices: RenumberNotice[]
+  // This device, recorded on a patient's OP number history when it is renumbered.
+  deviceId?: string
 }
 
 export interface ApplyResult {
@@ -45,7 +48,8 @@ const UNIQUE: Partial<Record<SyncTableName, { field: UniqueField; counter: strin
   certificates: { field: 'certNo', counter: 'cert' },
 }
 
-// <prefix>-<YYYY>-<n>, as made by nextOpNo / billing.
+// <prefix>-<YYYY>-<n>, as made by billing and certificates. OP numbers follow
+// the clinic's own format instead (lib/opFormat).
 const NUMBER_RE = /^(.*)-(\d{4})-(\d+)$/
 
 function validRecord(r: unknown, table: SyncTableName): r is SyncRecord {
@@ -148,9 +152,13 @@ async function dedupeNumbers(
     if (recs.length < 2) continue
     recs.sort((a, b) => (a.createdAt as number) - (b.createdAt as number) || ((a.id as string) < (b.id as string) ? -1 : 1))
     for (const r of recs.slice(1)) {
-      const next = await freeNumber(db, uniq, no, used)
+      const next = table === 'patients' ? await freeOpNo(db, no, used) : await freeNumber(db, uniq, no, used)
       used.add(next)
-      const nr = { ...r, [uniq.field]: next, updatedAt: Math.max(opts.now, (r.updatedAt as number) + 1) }
+      const nr: SyncRecord = { ...r, [uniq.field]: next, updatedAt: Math.max(opts.now, (r.updatedAt as number) + 1) }
+      if (table === 'patients') {
+        const change: OpNoChange = { from: no, to: next, at: opts.now, reason: 'sync', deviceId: opts.deviceId ?? '' }
+        nr.opNoHistory = [...((r.opNoHistory as OpNoChange[] | undefined) ?? []), change]
+      }
       final.set(r.id as string, nr)
       writeMap.set(r.id as string, nr)
       opts.notices.push({ at: opts.now, table, id: r.id as string, from: no, to: next })
@@ -158,6 +166,28 @@ async function dedupeNumbers(
     }
   }
   return { writes: [...writeMap.values()], renumbered }
+}
+
+// The next free OP number in the scope the clashing number was made in (its
+// year or month). A number that doesn't fit the clinic's format gets a -2, -3…
+// suffix.
+async function freeOpNo(db: ClinicDB, no: string, used: Set<string>): Promise<string> {
+  const format = opFormatOf((await db.kv.get('settings'))?.value as Partial<ClinicSettings> | undefined)
+  const split = splitOpNo(format, no)
+  if (!split) {
+    for (let i = 2; ; i++) if (!used.has(`${no}-${i}`)) return `${no}-${i}`
+  }
+  const key = `seq:op:${split.scope}`
+  let n = ((await db.kv.get(key))?.value as number | undefined) ?? 0
+  for (const u of used) {
+    const s = splitOpNo(format, u)
+    if (s?.scope === split.scope) n = Math.max(n, s.n)
+  }
+  let candidate: string
+  do candidate = split.make(++n)
+  while (used.has(candidate))
+  await db.kv.put({ key, value: n, updatedAt: Date.now() })
+  return candidate
 }
 
 async function freeNumber(db: ClinicDB, uniq: { counter: string }, no: string, used: Set<string>): Promise<string> {
@@ -208,19 +238,16 @@ export async function recomputeDerived(db: ClinicDB, touched: Touched): Promise<
 
 // Sequence counters are per device and not synced. After pulling another
 // device's records, move each counter past the highest number in use so the
-// next OP / bill / receipt / certificate / token here can't repeat one.
+// next bill / receipt / certificate / token here can't repeat one. (New OP
+// numbers look at the patients themselves, so they need no counter bump.)
 export async function bumpCounters(db: ClinicDB): Promise<void> {
   const max = new Map<string, number>()
   const see = (key: string, n: number) => {
     if (Number.isFinite(n) && n > (max.get(key) ?? 0)) max.set(key, n)
   }
   const today = todayISO()
-  await db.transaction('rw', [db.patients, db.bills, db.payments, db.certificates, db.appointments, db.kv], async (tx) => {
+  await db.transaction('rw', [db.bills, db.payments, db.certificates, db.appointments, db.kv], async (tx) => {
     tagTx(tx, true)
-    await db.patients.each((p: Patient) => {
-      const m = NUMBER_RE.exec(p.opNo ?? '')
-      if (m) see(`op:${m[2]}`, Number(m[3]))
-    })
     await db.bills.each((b: Bill) => {
       const m = NUMBER_RE.exec(b.billNo ?? '')
       if (m) see(`bill:${m[2]}`, Number(m[3]))

@@ -1,5 +1,6 @@
 import { db as appDb, type ClinicDB } from '../db/db'
 import { sha256Hex } from '../lib/compress/hash'
+import { getDeviceId } from './device'
 import { addNotices, applyRecords, bumpCounters, newTouched, recomputeDerived } from './apply'
 import { fromBase64, toBase64 } from './crypto'
 import { ALL_TABLES } from './engine'
@@ -84,7 +85,7 @@ export async function importBackup(text: string, d: ClinicDB = appDb): Promise<I
     const rows = parsed.tables[t]
     if (!Array.isArray(rows) || !rows.length) continue
     // Untagged: imported records are local changes and get pushed to Drive.
-    const r = await applyRecords(d, t, rows, { tag: false, now, touched, notices })
+    const r = await applyRecords(d, t, rows, { tag: false, now, touched, notices, deviceId: getDeviceId() })
     written += r.written
   }
   await recomputeDerived(d, touched)

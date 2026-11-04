@@ -6,7 +6,7 @@ An offline-first outpatient register for homeopathy clinics. It covers patients,
 
 ## Features
 
-- **Patients**: OP numbers (`OP-2026-00001`), search by name, phone or OP number, age from date of birth, multiple diagnoses per patient, and printable OP slips with a QR code.
+- **Patients**: OP numbers in your own format (`OP-2026-00001`, `260183`, …), search by name, phone or OP number, age from date of birth, multiple diagnoses per patient, and printable OP slips with a QR code.
 - **Visits**: tabbed case notes (complaint, history, mentals, generals, modalities, constitution) and prescriptions. Remedy autocomplete, potency, dose and repetition presets, "repeat last prescription" and follow-up dates speed these up.
 - **Appointments**: day, week and month calendar, with overlap checks when booking, walk-ins, and a token-based daily queue.
 - **Billing**: bills from visits or counter sales, discounts, part payments, receipts, voids and reversals. The dues list shows how long each amount has been outstanding.

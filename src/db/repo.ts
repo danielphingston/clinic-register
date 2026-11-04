@@ -1,6 +1,7 @@
 import type { EntityTable } from 'dexie'
 import { db } from './db'
 import type { BaseRecord, Branding, CertificateKind, ClinicSettings } from './types'
+import { DEFAULT_OP_FORMAT, opFormatOf, opNumberParser, opScope, renderOpNo } from '../lib/opFormat'
 
 type NewRecord<T extends BaseRecord> = Omit<T, keyof BaseRecord>
 
@@ -51,12 +52,35 @@ export async function nextSequence(name: string): Promise<number> {
   })
 }
 
-// OP-2026-00001. The sequence resets each calendar year.
-export async function nextOpNo(): Promise<string> {
+// The running number an OP number in the current scope would get next: one
+// past the highest of the patients already numbered in this scope (any device,
+// deleted ones too), this device's counter and the "Next OP number" setting.
+// Read-only; nextOpNo reserves it. `format` previews an unsaved format.
+export async function peekOpNumber(now = new Date(), format?: string): Promise<{ scope: string; n: number; format: string }> {
   const settings = await getSettings()
-  const year = new Date().getFullYear()
-  const n = await nextSequence(`op:${year}`)
-  return `${settings.opPrefix}-${year}-${String(n).padStart(5, '0')}`
+  const fmt = format ?? settings.opFormat
+  const scope = opScope(fmt, now)
+  const read = opNumberParser(fmt, now)
+  let max = ((await db.kv.get(`seq:op:${scope}`))?.value as number | undefined) ?? 0
+  for (const k of await db.patients.orderBy('opNo').keys()) {
+    const n = read(String(k))
+    if (n !== undefined && n > max) max = n
+  }
+  const floor = settings.opNextFloor
+  if (floor?.scope === scope && floor.n - 1 > max) max = floor.n - 1
+  return { scope, n: max + 1, format: fmt }
+}
+
+// The next OP number in the configured format (lib/opFormat), e.g.
+// OP-2026-00001 or 260183. Reserved on this device, so two calls never return
+// the same number.
+export async function nextOpNo(): Promise<string> {
+  const now = new Date()
+  return db.transaction('rw', [db.patients, db.kv], async () => {
+    const { scope, n, format } = await peekOpNumber(now)
+    await db.kv.put({ key: `seq:op:${scope}`, value: n, updatedAt: Date.now() })
+    return renderOpNo(format, now, n)
+  })
 }
 
 // ---- settings ----
@@ -69,7 +93,7 @@ export const DEFAULT_SETTINGS: ClinicSettings = {
   address: '',
   phone: '',
   email: '',
-  opPrefix: 'OP',
+  opFormat: DEFAULT_OP_FORMAT,
   whatsappDueTemplate:
     'Dear {name}, a balance of {balance} is pending at {clinic} ({opNo}, due {dueDate}). Kindly clear it on your next visit. Thank you.',
   whatsappTemplates: [
@@ -114,8 +138,9 @@ export const DEFAULT_SETTINGS: ClinicSettings = {
 }
 
 export async function getSettings(): Promise<ClinicSettings> {
-  const saved = await getKV<Partial<ClinicSettings>>('settings')
-  const merged = { ...DEFAULT_SETTINGS, ...saved }
+  const saved = await getKV<Partial<ClinicSettings> & { opPrefix?: string }>('settings')
+  const merged: ClinicSettings & { opPrefix?: string } = { ...DEFAULT_SETTINGS, ...saved, opFormat: opFormatOf(saved) }
+  delete merged.opPrefix
   // Per-type certificate settings merge field by field, so a type or field
   // added later gets its default.
   const types = { ...DEFAULT_SETTINGS.certTypes }

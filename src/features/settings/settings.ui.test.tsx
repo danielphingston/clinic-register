@@ -61,3 +61,51 @@ describe('whatsapp placeholder tags', () => {
     expect(body.selectionEnd).toBe('Hi {name}'.length)
   })
 })
+
+describe('OP number format', () => {
+  it('builds a format from clickable tags, previews it and sets the next number', async () => {
+    localStorage.setItem('auth:profile', JSON.stringify({ sub: '1', email: 'd@x.com', name: 'D' }))
+    window.history.replaceState(null, '', '/settings?tab=clinic')
+    render(<App />)
+    const user = userEvent.setup()
+    const yy = String(new Date().getFullYear() % 100).padStart(2, '0')
+
+    const format = await screen.findByLabelText('OP number format')
+    expect(format).toHaveValue('OP-{YYYY}-{N:5}')
+    expect(await screen.findByTestId('op-preview')).toHaveTextContent(`OP-${new Date().getFullYear()}-00001`)
+
+    // Each tag explains itself on hover or focus.
+    expect(screen.getByRole('button', { name: '+ Short year' })).toHaveAccessibleDescription(/Last two digits of the year.*26|e\.g\./)
+
+    // An empty prefix is fine: build {YY}{N:4} from the tags.
+    await user.clear(format)
+    await user.click(screen.getByRole('button', { name: '+ Short year' }))
+    await user.click(screen.getByRole('button', { name: '+ Number, 4 digits' }))
+    expect(format).toHaveValue('{YY}{N:4}')
+    expect(await screen.findByTestId('op-preview')).toHaveTextContent(`${yy}0001`)
+
+    // Examples open on click and can be applied.
+    await user.click(screen.getByRole('button', { name: 'Show examples' }))
+    const examples = screen.getByRole('button', { name: /\{YYYY\}\/\{N\}/ })
+    expect(examples).toHaveTextContent(`${new Date().getFullYear()}/183`)
+    await user.click(examples)
+    expect(format).toHaveValue('{YYYY}/{N}')
+    await user.click(screen.getByRole('button', { name: /\{YY\}\{N:4\} →/ }))
+
+    // A format without a running number can't be saved.
+    await user.clear(format)
+    await user.type(format, 'OP')
+    expect(screen.getByText(/needs a running number/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText(/OP number format: The format needs a running number/)).toBeInTheDocument()
+
+    await user.clear(format)
+    await user.click(screen.getByRole('button', { name: '+ Short year' }))
+    await user.click(screen.getByRole('button', { name: '+ Number, 4 digits' }))
+    await user.type(screen.getByLabelText('Next OP number'), '184')
+    expect(await screen.findByTestId('op-preview')).toHaveTextContent(`${yy}0184`)
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await vi.waitFor(async () => expect((await getSettings()).opFormat).toBe('{YY}{N:4}'))
+    expect((await getSettings()).opNextFloor).toEqual({ scope: `${yy}{N:4}`, n: 184 })
+  })
+})
