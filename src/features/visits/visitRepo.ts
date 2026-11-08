@@ -146,7 +146,7 @@ export async function visitsForPatient(patientId: string): Promise<Visit[]> {
 }
 
 // Terms used before in the complaint cards, for suggestions.
-export type TermField = 'complaint' | 'duration' | 'aggravation' | 'amelioration'
+export type TermField = 'complaint' | 'duration' | 'aggravation' | 'amelioration' | 'ailmentsFrom'
 
 export async function knownComplaintTerms(): Promise<Record<TermField, string[]>> {
   const rows = await db.visits.where('deleted').equals(0).toArray()
@@ -161,7 +161,7 @@ export async function knownComplaintTerms(): Promise<Record<TermField, string[]>
     }
     return [...seen.values()].sort((a, b) => a.localeCompare(b))
   }
-  return { complaint: collect('complaint'), duration: collect('duration'), aggravation: collect('aggravation'), amelioration: collect('amelioration') }
+  return { complaint: collect('complaint'), duration: collect('duration'), aggravation: collect('aggravation'), amelioration: collect('amelioration'), ailmentsFrom: collect('ailmentsFrom') }
 }
 
 // Items saved in one transaction can share a createdAt, so `order` decides.

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ComplaintDetail, ComplaintStatusValue, GeneralsChecklist } from '../../db/types'
-import { addTerm, hasTerm, LEVELS, MODALITY_QUICK_PICKS, SLEEP_OPTIONS, STATUS_OPTIONS, STOOL_OPTIONS, toggleTerm, URINE_OPTIONS } from './caseNotes'
+import { addTerm, AILMENTS_FROM_QUICK_PICKS, hasTerm, LEVELS, MODALITY_QUICK_PICKS, SLEEP_OPTIONS, STATUS_OPTIONS, STOOL_OPTIONS, toggleTerm, URINE_OPTIONS } from './caseNotes'
 import type { TermField } from './visitRepo'
 
 function Pill({ pressed, onClick, children }: { pressed: boolean; onClick: () => void; children: string }) {
@@ -90,10 +90,28 @@ export function GeneralsChecklistFields({ value, onChange }: { value: GeneralsCh
   )
 }
 
-const TERM_FIELDS: TermField[] = ['complaint', 'duration', 'aggravation', 'amelioration']
+const TERM_FIELDS: TermField[] = ['complaint', 'duration', 'aggravation', 'amelioration', 'ailmentsFrom']
 
 // Removable chips, an add box (Enter, "Add" or leaving the box) and quick chips that toggle an entry.
-function Modality({ n, field, title, sign, value, onChange }: { n: number; field: 'aggravation' | 'amelioration'; title: string; sign: string; value?: string[]; onChange: (v: string[]) => void }) {
+function TermList({
+  n,
+  field,
+  title,
+  sign,
+  picks = MODALITY_QUICK_PICKS,
+  className,
+  value,
+  onChange,
+}: {
+  n: number
+  field: 'aggravation' | 'amelioration' | 'ailmentsFrom'
+  title: string
+  sign: string
+  picks?: string[]
+  className?: string
+  value?: string[]
+  onChange: (v: string[]) => void
+}) {
   const [draft, setDraft] = useState('')
   const entries = value ?? []
   const commit = () => {
@@ -101,7 +119,7 @@ function Modality({ n, field, title, sign, value, onChange }: { n: number; field
     setDraft('')
   }
   return (
-    <div role="group" aria-label={`${title} ${n}`}>
+    <div role="group" aria-label={`${title} ${n}`} className={className}>
       <label className="label" htmlFor={`c${n}-${field}`}>
         {title} ({sign})
       </label>
@@ -133,12 +151,12 @@ function Modality({ n, field, title, sign, value, onChange }: { n: number; field
           }}
           onBlur={commit}
         />
-        <button type="button" className="btn-ghost border border-slate-300 px-3 py-1" aria-label={`Add ${field} ${n}`} onClick={commit}>
+        <button type="button" className="btn-ghost border border-slate-300 px-3 py-1" aria-label={`Add ${title.toLowerCase()} ${n}`} onClick={commit}>
           Add
         </button>
       </div>
       <div role="group" aria-label={`${title} ${n} quick picks`} className="mt-1.5 flex flex-wrap gap-1">
-        {MODALITY_QUICK_PICKS.map((t) => (
+        {picks.map((t) => (
           <button
             key={t}
             type="button"
@@ -154,7 +172,7 @@ function Modality({ n, field, title, sign, value, onChange }: { n: number; field
   )
 }
 
-// One card per complaint: the complaint, its duration, and what aggravates and ameliorates it.
+// One card per complaint: the complaint, its duration, what aggravates and ameliorates it, and what it started after.
 export function ComplaintCards({ cards, known, onChange }: { cards: ComplaintDetail[]; known?: Record<TermField, string[]>; onChange: (cards: ComplaintDetail[]) => void }) {
   const focus = useRef<number | null>(null)
   useEffect(() => {
@@ -215,8 +233,18 @@ export function ComplaintCards({ cards, known, onChange }: { cards: ComplaintDet
                 onChange={(e) => set(i, { duration: e.target.value })}
               />
             </div>
-            <Modality n={i + 1} field="aggravation" title="Aggravation" sign="<" value={c.aggravation} onChange={(aggravation) => set(i, { aggravation })} />
-            <Modality n={i + 1} field="amelioration" title="Amelioration" sign=">" value={c.amelioration} onChange={(amelioration) => set(i, { amelioration })} />
+            <TermList n={i + 1} field="aggravation" title="Aggravation" sign="<" value={c.aggravation} onChange={(aggravation) => set(i, { aggravation })} />
+            <TermList n={i + 1} field="amelioration" title="Amelioration" sign=">" value={c.amelioration} onChange={(amelioration) => set(i, { amelioration })} />
+            <TermList
+              n={i + 1}
+              field="ailmentsFrom"
+              title="Ailments from"
+              sign="A/F"
+              picks={AILMENTS_FROM_QUICK_PICKS}
+              className="sm:col-span-2"
+              value={c.ailmentsFrom}
+              onChange={(ailmentsFrom) => set(i, { ailmentsFrom })}
+            />
           </div>
         </div>
       ))}

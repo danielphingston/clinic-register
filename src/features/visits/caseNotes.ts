@@ -36,6 +36,9 @@ export const STATUS_OPTIONS: { value: ComplaintStatusValue; label: string }[] = 
 // Tap-to-pick terms for Aggravation (<) and Amelioration (>).
 export const MODALITY_QUICK_PICKS = ['Morning', 'Evening', 'Night', 'Cold', 'Heat', 'Damp weather', 'Open air', 'Motion', 'Rest', 'Lying down', 'Pressure', 'Touch', 'Eating', 'Sun', 'Noise']
 
+// Tap-to-pick causes for Ailments from (A/F).
+export const AILMENTS_FROM_QUICK_PICKS = ['Grief', 'Fright', 'Anger', 'Anxiety', 'Disappointment', 'Injury', 'Getting wet', 'Cold exposure', 'Sun exposure', 'Overexertion', 'Loss of sleep', 'Suppression', 'Vaccination']
+
 const label = (opts: readonly { value: string; label: string }[], v: string) => opts.find((o) => o.value === v)?.label ?? v
 
 // Trimmed, non-empty lines (what is stored); typing happens on raw lines.
@@ -145,10 +148,12 @@ export function cleanDetail(d: ComplaintDetail): ComplaintDetail {
   const duration = d.duration?.trim()
   const aggravation = cleanEntries(d.aggravation)
   const amelioration = cleanEntries(d.amelioration)
+  const ailmentsFrom = cleanEntries(d.ailmentsFrom)
   if (complaint) out.complaint = complaint
   if (duration) out.duration = duration
   if (aggravation.length) out.aggravation = aggravation
   if (amelioration.length) out.amelioration = amelioration
+  if (ailmentsFrom.length) out.ailmentsFrom = ailmentsFrom
   return out
 }
 
@@ -161,7 +166,7 @@ export function cleanDetails(list: ComplaintDetail[]): ComplaintDetail[] {
 // ("Damp weather" -> "damp weather"); acronyms stay.
 const lowerTerm = (t: string) => (/^[A-Z][^A-Z]/.test(t) || t.length === 1 ? t[0].toLowerCase() + t.slice(1) : t)
 
-// "Throbbing headache, right temple; since 3 months; < sun, noise; > pressure"
+// "Throbbing headache, right temple; since 3 months; < sun, noise; > pressure; A/F grief"
 export function complaintSummary(d: ComplaintDetail): string {
   const c = cleanDetail(d)
   return [
@@ -169,6 +174,7 @@ export function complaintSummary(d: ComplaintDetail): string {
     c.duration && `since ${c.duration}`,
     c.aggravation && `< ${c.aggravation.map(lowerTerm).join(', ')}`,
     c.amelioration && `> ${c.amelioration.map(lowerTerm).join(', ')}`,
+    c.ailmentsFrom && `A/F ${c.ailmentsFrom.map(lowerTerm).join(', ')}`,
   ]
     .filter(Boolean)
     .join('; ')

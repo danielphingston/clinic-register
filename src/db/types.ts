@@ -65,6 +65,7 @@ export interface ComplaintDetail {
   duration?: string // duration / onset
   aggravation?: string[] // modalities that make it worse (<)
   amelioration?: string[] // modalities that make it better (>)
+  ailmentsFrom?: string[] // causes the complaint started after (A/F), e.g. grief, injury
 }
 
 export interface CaseNotes {
