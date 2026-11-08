@@ -54,7 +54,7 @@ describe('generals checklist', () => {
 
 describe('complaint cards', () => {
   it('trims fields and entries and drops empty ones and empty cards', () => {
-    expect(cleanDetail({ complaint: ' Head ', duration: '  ', aggravation: [' Sun ', '', 'sun', 'Noise'], amelioration: [' '] })).toEqual({ complaint: 'Head', aggravation: ['Sun', 'Noise'] })
+    expect(cleanDetail({ complaint: ' Head ', duration: '  ', aggravation: [' Sun ', '', 'sun', 'Noise'], amelioration: [' '], ailmentsFrom: [' Grief ', 'grief'] })).toEqual({ complaint: 'Head', aggravation: ['Sun', 'Noise'], ailmentsFrom: ['Grief'] })
     expect(cleanDetails([{ complaint: ' ' }, { duration: '2 days' }, { aggravation: [] }, {}])).toEqual([{ duration: '2 days' }])
     expect(cleanEntries(undefined)).toEqual([])
   })
@@ -72,6 +72,7 @@ describe('complaint cards', () => {
     expect(complaintSummary({ complaint: 'Cough' })).toBe('Cough')
     expect(complaintSummary({ duration: '2 days', amelioration: ['Rest'] })).toBe('since 2 days; > rest')
     expect(complaintSummary({ complaint: 'Fever', aggravation: ['AC room'] })).toBe('Fever; < AC room')
+    expect(complaintSummary({ complaint: 'Insomnia', amelioration: ['Rest'], ailmentsFrom: ['Grief', 'Loss of sleep'] })).toBe('Insomnia; > rest; A/F grief, loss of sleep')
     expect(complaintSummary({})).toBe('')
   })
 

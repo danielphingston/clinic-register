@@ -242,6 +242,9 @@ describe('visit UI', () => {
     expect(aggr.getByRole('button', { name: 'Sun' })).toHaveAttribute('aria-pressed', 'false')
     await user.click(aggr.getByRole('button', { name: 'Sun' }))
     await user.click(within(screen.getByRole('group', { name: 'Amelioration 1 quick picks' })).getByRole('button', { name: 'Pressure' }))
+    await user.click(within(screen.getByRole('group', { name: 'Ailments from 1 quick picks' })).getByRole('button', { name: 'Grief' }))
+    await user.type(screen.getByRole('combobox', { name: 'Ailments from 1' }), 'Head injury')
+    await user.click(screen.getByRole('button', { name: 'Add ailments from 1' }))
     await user.click(screen.getByRole('button', { name: '+ Add complaint' }))
     expect(screen.getByRole('combobox', { name: 'Complaint 2' })).toHaveFocus()
     await user.type(screen.getByRole('combobox', { name: 'Complaint 2' }), 'Cough')
@@ -267,11 +270,11 @@ describe('visit UI', () => {
     const visit = await screen.findByTestId('visit')
     expect(within(visit).getByTestId('visit-generals')).toHaveTextContent('Appetite: Decreased · Urine: Normal · Sleep: Sound · Stool: Constipation (every 3 days) · Sweat: Increased (palms)')
     const [first] = await visitsForPatient(p.id)
-    const headache1 = 'Throbbing headache, right temple; since 3 months; < noise, sun; > pressure'
+    const headache1 = 'Throbbing headache, right temple; since 3 months; < noise, sun; > pressure; A/F grief, head injury'
     expect(first.caseNotes).toEqual({
       complaint: `${headache1}\nCough`,
       complaints: [headache1, 'Cough'],
-      complaintDetails: [{ complaint: 'Throbbing headache, right temple', duration: '3 months', aggravation: ['Noise', 'Sun'], amelioration: ['Pressure'] }, { complaint: 'Cough' }],
+      complaintDetails: [{ complaint: 'Throbbing headache, right temple', duration: '3 months', aggravation: ['Noise', 'Sun'], amelioration: ['Pressure'], ailmentsFrom: ['Grief', 'Head injury'] }, { complaint: 'Cough' }],
       generalsChecklist: { appetite: 'decreased', urine: ['normal'], sleep: 'sound', stool: 'constipation', constipationDays: 3, sweat: 'increased', sweatParts: 'palms' },
     })
 
