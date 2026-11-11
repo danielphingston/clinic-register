@@ -4,7 +4,7 @@ import { createPatient } from '../patients/patientRepo'
 import { saveVisit } from '../visits/visitRepo'
 import { createBill } from '../billing/billingRepo'
 import { seedRemedies, seedRemedyId } from '../remedies/remedyRepo'
-import { buildReport, formatCell, pctChange, type ReportResult } from './reportDefs'
+import { buildReport, changeLine, formatCell, pctChange, tileChange, type ReportResult } from './reportDefs'
 import { periodOf } from '../../lib/period'
 import { buildReportWorkbook, buildSheetsWorkbook, reportFileName, safeSheetName } from './excel'
 import { allDataSheets } from './exportAll'
@@ -28,7 +28,30 @@ describe('Excel export', () => {
     await fixture()
     const report = await buildReport('trends', { from: '2026-10-01', to: '2026-10-31' }, '2026-11-11', periodOf('month', '2026-10-01'))
     const wb = roundTrip(buildReportWorkbook(XLSX, report, 'Sunrise Clinic'))
-    expect(wb.SheetNames).toEqual(['Summary', 'Patients compared', 'Collections compared', 'Per day', 'Collections by mode'])
+    expect(wb.SheetNames).toEqual([
+      'Summary',
+      'Patients compared',
+      'Collections compared',
+      'Per day',
+      'Collections by mode',
+      'Follow-ups due in the period',
+      'New patients not seen again',
+      'Visits by weekday',
+      'Arrivals by hour',
+      'Complaint progress',
+      'Top diagnoses',
+      'Top remedies',
+    ])
+    // The summary carries each tile's earlier values and change, then the section tiles under their titles.
+    const sum = wb.Sheets.Summary
+    const srows = XLSX.utils.sheet_to_json<unknown[]>(sum, { header: 1, blankrows: true })
+    expect(srows[2]).toEqual(['Measure', 'Value', 'September 2026', 'Change', 'October 2025', 'Change'])
+    expect(srows[3]).toEqual(['Visits', 1, 0, '', 0, ''])
+    const health = srows.findIndex((r) => r[0] === 'Collection health')
+    expect(health).toBeGreaterThan(3)
+    const rate = srows.findIndex((r) => r[0] === 'Collected ÷ billed')
+    expect(srows[rate].slice(0, 2)).toEqual(['Collected ÷ billed', 1])
+    expect(sum[XLSX.utils.encode_cell({ r: rate, c: 1 })].z).toBe('0.0%')
     const ws = wb.Sheets['Collections compared']
     const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1 })
     expect(rows[0]).toEqual(['Sunrise Clinic — Trends: October 2026 — 01 Oct 2026 to 31 Oct 2026'])
@@ -135,5 +158,17 @@ describe('period changes', () => {
     expect(formatCell(-0.125, 'change')).toBe('−12.5%')
     expect(formatCell(0.0001, 'change')).toBe('0%')
     expect(formatCell(null, 'change')).toBe('')
+  })
+
+  it('compares rates in points, and colours a rise as bad news where lower is better', () => {
+    expect(tileChange({ type: 'percent', value: 0.8 }, 0.6)).toEqual({ dir: 'up', text: '20 pts', good: true, value: 20 })
+    expect(tileChange({ type: 'percent', value: 0.3, lowerIsBetter: true }, 0.2)).toMatchObject({ dir: 'up', text: '10 pts', good: false })
+    expect(tileChange({ type: 'money', value: 800, lowerIsBetter: true }, 1000)).toMatchObject({ dir: 'down', text: '20%', good: true, value: -0.2 })
+    expect(tileChange({ type: 'int', value: 5 }, 5)).toEqual({ dir: 'flat', text: '0%', good: null, value: 0 })
+    expect(tileChange({ type: 'percent', value: null }, 0.5)).toBeNull()
+    expect(tileChange({ type: 'int', value: 3 }, 0)).toBeNull()
+    const tile = { label: 'Visits', type: 'int' as const, value: 6 }
+    expect(changeLine(tile, { label: 'October 2026', value: 4 })).toBe('▲ 50% vs October 2026')
+    expect(changeLine(tile, { label: 'November 2025', value: 0 })).toBe('— vs November 2025')
   })
 })

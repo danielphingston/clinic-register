@@ -39,6 +39,16 @@ export default function PrintReport() {
       {report.tables.map((t) => (
         <ReportTableView key={t.title} table={t} print />
       ))}
+      {report.sections?.map((sec) => (
+        <section key={sec.title} className="mt-5 break-inside-avoid-page">
+          <h2 className="border-b border-slate-400 text-[12pt] font-bold">{sec.title}</h2>
+          {sec.tiles.length > 0 && <Tiles tiles={sec.tiles} print />}
+          {sec.note && <p className="mt-1 text-[8.5pt] text-slate-600">{sec.note}</p>}
+          {sec.tables.map((t) => (
+            <ReportTableView key={t.title} table={t} print />
+          ))}
+        </section>
+      ))}
       <p className="mt-4 text-[8pt] text-slate-500">Printed {formatDate(today)}</p>
     </PrintShell>
   )

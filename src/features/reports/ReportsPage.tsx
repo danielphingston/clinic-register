@@ -5,7 +5,7 @@ import { getSettings } from '../../db/repo'
 import { presetRange, rangeLabel, RANGE_PRESETS, type RangePreset } from '../../lib/dateRange'
 import { todayISO } from '../../lib/format'
 import { trendWindows } from '../../lib/period'
-import { buildReport, REPORTS, type ReportType } from './reportDefs'
+import { buildReport, REPORTS, type ReportSection, type ReportType } from './reportDefs'
 import { printReportPath, readReportState, reportSearch } from './reportUrl'
 import { ReportTableView, Tiles } from './ReportTableView'
 import { PeriodBar } from './PeriodBar'
@@ -141,22 +141,38 @@ export function ReportsPage() {
         <p className="text-sm text-slate-500">Loading…</p>
       ) : (
         <div className="space-y-4" data-testid={`report-${type}`}>
-          <Tiles tiles={report.tiles} />
-          {report.note && <p className="text-xs text-slate-500">{report.note}</p>}
-          {report.charts.length > 0 && (
-            <Suspense fallback={<div className="card h-60 text-sm text-slate-500">Loading chart…</div>}>
-              <div className="grid gap-4">
-                {report.charts.map((c) => (
-                  <ReportChart key={c.title} spec={c} />
-                ))}
-              </div>
-            </Suspense>
-          )}
-          {report.tables.map((t) => (
-            <ReportTableView key={t.title} table={t} />
+          <ReportPart part={report} />
+          {report.sections?.map((sec, i) => (
+            <section key={sec.title} aria-labelledby={`section-${i}`} className="space-y-4 pt-4" data-testid={`section-${sec.title}`}>
+              <h2 id={`section-${i}`} className="border-b border-slate-200 pb-1 text-lg font-semibold">
+                {sec.title}
+              </h2>
+              <ReportPart part={sec} />
+            </section>
           ))}
         </div>
       )}
     </div>
+  )
+}
+
+function ReportPart({ part }: { part: Pick<ReportSection, 'tiles' | 'note' | 'charts' | 'tables'> }) {
+  return (
+    <>
+      {part.tiles.length > 0 && <Tiles tiles={part.tiles} />}
+      {part.note && <p className="text-xs text-slate-500">{part.note}</p>}
+      {part.charts.length > 0 && (
+        <Suspense fallback={<div className="card h-60 text-sm text-slate-500">Loading chart…</div>}>
+          <div className="grid gap-4">
+            {part.charts.map((c) => (
+              <ReportChart key={c.title} spec={c} />
+            ))}
+          </div>
+        </Suspense>
+      )}
+      {part.tables.map((t) => (
+        <ReportTableView key={t.title} table={t} />
+      ))}
+    </>
   )
 }

@@ -15,21 +15,21 @@ import { roundQty, stockStatus, type StockStatus } from '../stock/stockLogic'
 const byDateThenCreated = (a: { date: string; createdAt: number }, b: { date: string; createdAt: number }) =>
   a.date.localeCompare(b.date) || a.createdAt - b.createdAt
 
-async function livePatients(ids: Iterable<string>): Promise<Map<string, Patient>> {
+export async function livePatients(ids: Iterable<string>): Promise<Map<string, Patient>> {
   const unique = [...new Set(ids)]
   const map = new Map<string, Patient>()
   for (const p of await db.patients.bulkGet(unique)) if (p && p.deleted === 0) map.set(p.id, p)
   return map
 }
 
-async function visitsInRange({ from, to }: DateRange): Promise<{ visits: Visit[]; patients: Map<string, Patient> }> {
+export async function visitsInRange({ from, to }: DateRange): Promise<{ visits: Visit[]; patients: Map<string, Patient> }> {
   const raw = await db.visits.where('date').between(from, to, true, true).filter((v) => v.deleted === 0).toArray()
   const patients = await livePatients(raw.map((v) => v.patientId))
   return { visits: raw.filter((v) => patients.has(v.patientId)).sort(byDateThenCreated), patients }
 }
 
 // Id of each patient's first-ever (non-deleted) visit, by date then entry time.
-async function firstVisitIds(patientIds: Iterable<string>): Promise<Set<string>> {
+export async function firstVisitIds(patientIds: Iterable<string>): Promise<Set<string>> {
   const all = await db.visits.where('patientId').anyOf([...new Set(patientIds)]).filter((v) => v.deleted === 0).toArray()
   const first = new Map<string, Visit>()
   for (const v of all) {

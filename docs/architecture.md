@@ -50,6 +50,8 @@ Shared appointment UI, such as the booking dialogs and the queue, must not impor
 
 The Trends report is chosen by period rather than date range: `?report=trends&period=week|month|quarter|year&at=<period start>[&fy=1]`, and the print view takes the same parameters. `src/lib/period.ts` defines the periods (weeks start on Monday; `fy` makes years run April to March and numbers quarters from April) and the windows each period is compared with. A period still running is cut at today, and its comparisons (the previous period, and the same period a year back, 52 weeks back for a week) cover the same number of days from their own start.
 
+Its main part comes from `trendsData` in `reportQueries.ts`; the Collection health, Follow-ups, Busy days & no-shows and Clinical trends sections come from `trendsQueries.ts` and are returned as `ReportResult.sections`, which the screen, print and Excel views render after the main tables. Tiles can carry `compare` values (a % change, or points for `percent` tiles) and `lowerIsBetter`; tables can mark columns as `heat` to shade them. Dues on a past day are rebuilt from bills and payments dated up to then, since bills only keep their current balance.
+
 ## Service worker
 
 `src/sw.ts` is a custom worker built with vite-plugin-pwa `injectManifest`. It handles:

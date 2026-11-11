@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom'
-import { formatCell, formatTile, pctChange, type ColType, type ReportTable, type Tile } from './reportDefs'
+import { changeLine, formatCell, formatTile, tileChange, type ColType, type ReportTable, type Tile } from './reportDefs'
 
 const NUMERIC: ColType[] = ['int', 'money', 'qty', 'percent', 'change']
 const TONE = { warn: 'bg-amber-50', bad: 'bg-red-50' }
 
 export function ReportTableView({ table, print = false }: { table: ReportTable; print?: boolean }) {
   const align = (t: ColType) => (NUMERIC.includes(t) ? 'text-right tabular-nums' : 'text-left')
+  const heatMax = Math.max(1, ...table.rows.flatMap((r) => (table.heat ?? []).map((k) => Number(r[k]) || 0)))
   const cellPad = print ? 'px-1.5 py-1' : 'px-3 py-2'
   return (
     <section className={print ? 'mt-4' : 'card overflow-hidden p-0'}>
@@ -40,7 +41,7 @@ export function ReportTableView({ table, print = false }: { table: ReportTable; 
                     const text = formatCell(r[c.key] ?? null, c.type)
                     const wrap = c.key === 'complaint' || c.key === 'remedies' ? (print ? '' : 'min-w-[12rem]') : 'whitespace-nowrap'
                     return (
-                      <td key={c.key} className={`${cellPad} ${align(c.type)} ${wrap}`}>
+                      <td key={c.key} className={`${cellPad} ${align(c.type)} ${wrap}`} style={table.heat?.includes(c.key) ? heatStyle(Number(r[c.key]) || 0, heatMax) : undefined}>
                         {link && ci === firstTextCol(table) ? (
                           <Link to={link} className="font-medium text-brand-700 hover:underline">
                             {text}
@@ -72,6 +73,13 @@ export function ReportTableView({ table, print = false }: { table: ReportTable; 
   )
 }
 
+// Brand green, stronger for bigger values; empty cells stay blank.
+function heatStyle(v: number, max: number): React.CSSProperties | undefined {
+  if (v <= 0) return undefined
+  const a = 0.12 + 0.68 * (v / max)
+  return { backgroundColor: `rgba(23, 128, 94, ${a.toFixed(2)})`, color: a > 0.5 ? '#fff' : undefined, printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact' }
+}
+
 // The name column (or first text column) carries the row link.
 function firstTextCol(t: ReportTable): number {
   const name = t.columns.findIndex((c) => c.key === 'name' || c.key === 'remedyName')
@@ -86,6 +94,7 @@ export function Tiles({ tiles, print = false }: { tiles: Tile[]; print?: boolean
           <div key={t.label}>
             <dt className="inline text-slate-600">{t.label}: </dt>
             <dd className="inline font-semibold">{formatTile(t)}</dd>
+            {t.compare?.length ? <dd className="inline text-slate-600"> ({t.compare.map((c) => changeLine(t, c)).join('; ')})</dd> : null}
           </div>
         ))}
       </dl>
@@ -102,8 +111,8 @@ export function Tiles({ tiles, print = false }: { tiles: Tile[]; print?: boolean
           </dd>
           {t.hint && <dd className="text-xs text-slate-500">{t.hint}</dd>}
           {t.compare?.map((c) => (
-            <dd key={c.label} className="mt-0.5 text-xs" data-testid={`tile-${t.label}-vs`} title={`${c.label}: ${formatCell(c.value, t.type)}`}>
-              <Change value={pctChange(t.value, c.value)} /> <span className="text-slate-500">vs {c.label}</span>
+            <dd key={c.label} className="mt-0.5 text-xs" data-testid={`tile-${t.label}-vs`} title={`${c.label}: ${c.value == null ? '—' : formatCell(c.value, t.type)}`}>
+              <Change tile={t} prev={c.value} /> <span className="text-slate-500">vs {c.label}</span>
             </dd>
           ))}
         </div>
@@ -112,22 +121,17 @@ export function Tiles({ tiles, print = false }: { tiles: Tile[]; print?: boolean
   )
 }
 
-// "▲ 12%" in green, "▼ 5%" in red; "—" when the earlier period had nothing.
-function Change({ value }: { value: number | null }) {
-  if (value == null) return <span className="font-medium text-slate-500">—</span>
-  const text = formatCell(Math.abs(value), 'percent')
-  if (Math.round(value * 1000) === 0) return <span className="font-medium text-slate-600">± 0%</span>
-  return value > 0 ? (
-    <span className="font-medium text-emerald-700">
-      <span aria-hidden="true">▲ </span>
-      <span className="sr-only">up </span>
-      {text}
-    </span>
-  ) : (
-    <span className="font-medium text-red-700">
-      <span aria-hidden="true">▼ </span>
-      <span className="sr-only">down </span>
-      {text}
+// "▲ 12%" green when it is good news, red when bad; "—" when there is
+// nothing to compare with.
+function Change({ tile, prev }: { tile: Tile; prev: number | null }) {
+  const ch = tileChange(tile, prev)
+  if (!ch) return <span className="font-medium text-slate-500">—</span>
+  if (ch.dir === 'flat') return <span className="font-medium text-slate-600">± 0%</span>
+  return (
+    <span className={`font-medium ${ch.good ? 'text-emerald-700' : 'text-red-700'}`}>
+      <span aria-hidden="true">{ch.dir === 'up' ? '▲ ' : '▼ '}</span>
+      <span className="sr-only">{ch.dir} </span>
+      {ch.text}
     </span>
   )
 }

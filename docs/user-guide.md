@@ -15,7 +15,17 @@
 - **Tiles**: visits, patients seen, new patients (first-ever visit in the period), returning patients, amount collected (payments received, whatever the bill date) and amount billed. Under each is the change against the previous period and the same period last year, such as "▲ 12% vs October 2026". Hover or long-press it to see the earlier figure. "—" means there was nothing to compare with.
 - **A period still in progress** is compared like for like: 1–11 November is compared with 1–11 October and 1–11 November last year, not with the whole of October.
 - **Charts**: visits per day (per week for a quarter, per month for a year) split into new and revisit, and money collected by payment mode, with the amount billed as a dashed line.
-- **Tables**: the comparisons with the earlier figures, the per-day (or week, or month) numbers, and collections by mode. **Print** and **Export to Excel** include all of them.
+- **Tables**: the comparisons with the earlier figures, the per-day (or week, or month) numbers, and collections by mode.
+- **Rates** such as follow-up adherence change in points ("▲ 5 pts"). For no-shows, outstanding dues and patients not seen again a rise is shown in red.
+
+Below these come four sections, each compared the same way:
+
+- **Collection health**: collected per visit, collected ÷ billed (over 100% when old dues are paid off), and outstanding dues at the end of the period, with the amount at its start.
+- **Follow-ups**: of the follow-up dates in the period, the share where the patient came back within 7 days either side. The table splits them into on time, early, late and did not come back. Dates less than 7 days past are not counted yet. **New patients not seen again** lists patients first seen in the period who have not been back, more than 7 days after they were due (their follow-up date, or 30 days after the visit if none was set). Tap a name to open the patient and get in touch.
+- **Busy days & no-shows**: the no-show rate, average visits on each weekday (the busiest is highlighted), and **Arrivals by hour**, a heatmap of appointments and walk-ins marked arrived or done by weekday and hour. Use it to plan sessions and leave days.
+- **Clinical trends**: of the complaints reviewed at follow-up visits, the share better or resolved, the top diagnoses of patients seen, and the most prescribed remedies, each against the previous period.
+
+**Print** and **Export to Excel** include everything: the comparisons print beside each figure, and the Excel **Summary** sheet has the earlier values and changes in their own columns.
 
 ## Case notes
 
