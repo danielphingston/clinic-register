@@ -4,9 +4,13 @@ import { describe, expect, it, vi } from 'vitest'
 import App from '../../App'
 import { createPatient } from '../patients/patientRepo'
 import { saveVisit } from '../visits/visitRepo'
+import { insert } from '../../db/repo'
+import { db } from '../../db/db'
+import type { Appointment } from '../../db/types'
 import { createBill } from '../billing/billingRepo'
 import { seedRemedies, seedRemedyId } from '../remedies/remedyRepo'
 import { addDays, formatDate, todayISO } from '../../lib/format'
+import { periodLabel, periodOf, shiftPeriod } from '../../lib/period'
 
 vi.mock('../../auth/google', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../auth/google')>()),
@@ -87,6 +91,113 @@ describe('reports page', () => {
     expect(document.querySelector('table.report-table thead')).not.toBeNull()
     expect(screen.queryByRole('link', { name: 'Asha' })).toBeNull() // no links on paper
     expect(screen.getByText('Asha')).toBeInTheDocument()
+  })
+
+  it('shows trends for the current month with comparisons, and steps through periods', async () => {
+    const user = userEvent.setup()
+    await data()
+    // Last month's first day always falls inside the like-for-like comparison.
+    const month = periodOf('month', today)
+    const last = shiftPeriod(month, -1)
+    const b = await createPatient({ name: 'Bala' })
+    await saveVisit({ patientId: b.id, date: last.start, caseNotes: {}, items: [] })
+    await createBill({ patientId: b.id, date: last.start, items: [{ desc: 'Consultation', amount: 100 }], discount: 0, payNow: { amount: 100, mode: 'cash' } })
+
+    open('/reports?report=trends')
+    await screen.findByTestId('report-trends')
+    expect(screen.getByRole('button', { name: 'Trends' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByTestId('period-label')).toHaveTextContent(periodLabel(month))
+    expect(screen.getByRole('button', { name: 'Month' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /^Next:/ })).toBeDisabled()
+    expect(screen.queryByLabelText('Range')).toBeNull()
+
+    expect(screen.getByTestId('tile-Visits')).toHaveTextContent('1')
+    expect(screen.getByTestId('tile-Collected')).toHaveTextContent('₹250')
+    const [vsLast, vsYear] = screen.getAllByTestId('tile-Collected-vs')
+    expect(vsLast).toHaveTextContent(`up 150% vs ${periodLabel(last)}`) // ₹250 against ₹100
+    expect(vsLast).toHaveAttribute('title', `${periodLabel(last)}: ₹100`)
+    expect(vsYear).toHaveTextContent(`— vs ${periodLabel(shiftPeriod(month, -12))}`) // nothing a year back
+    expect(screen.getAllByTestId('tile-Visits-vs')[0]).toHaveTextContent('± 0%')
+    expect(screen.getAllByTestId('tile-New patients-vs')[0]).toHaveTextContent('± 0%')
+    const charts = await screen.findAllByTestId('chart')
+    expect(charts.map((c) => c.textContent)).toEqual(['Visits per day', 'Collected per day', 'Average visits by weekday'])
+    for (const t of ['Patients compared', 'Collections compared', 'Per day', 'Collections by mode']) {
+      expect(screen.getByRole('heading', { name: new RegExp(`^${t} \\(`) })).toBeInTheDocument()
+    }
+    expect(screen.getByRole('link', { name: 'Print' })).toHaveAttribute('href', `/print/report/trends?period=month&at=${month.start}`)
+
+    await user.click(screen.getByRole('button', { name: 'Quarter' }))
+    expect(window.location.search).toBe(`?report=trends&period=quarter&at=${periodOf('quarter', today).start}`)
+    expect(screen.getByTestId('period-label')).toHaveTextContent(periodLabel(periodOf('quarter', today)))
+    expect((await screen.findAllByTestId('chart'))[0]).toHaveTextContent('Visits per week')
+
+    await user.selectOptions(screen.getByLabelText('Year'), 'fy')
+    expect(window.location.search).toContain('&fy=1')
+    expect(screen.getByTestId('period-label')).toHaveTextContent(/^Q\d FY \d{4}–\d\d/)
+
+    await user.click(screen.getByRole('button', { name: 'Year' }))
+    const fy = periodOf('year', today, true)
+    expect(screen.getByTestId('period-label')).toHaveTextContent(periodLabel(fy))
+    await user.click(screen.getByRole('button', { name: `Previous: ${periodLabel(shiftPeriod(fy, -1))}` }))
+    expect(screen.getByTestId('period-label')).toHaveTextContent(periodLabel(shiftPeriod(fy, -1)))
+    await waitFor(() => expect(screen.getByTestId('tile-Visits')).toHaveTextContent('0'))
+    expect(screen.getByRole('button', { name: /^Next:/ })).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: 'Current' }))
+    expect(screen.getByTestId('period-label')).toHaveTextContent(periodLabel(fy))
+    expect(screen.queryByRole('button', { name: 'Current' })).toBeNull()
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Export to Excel' })).toBeEnabled())
+    await user.click(screen.getByRole('button', { name: 'Export to Excel' }))
+    await waitFor(() => expect(exportSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'trends', title: `Trends: ${periodLabel(fy)}` }), ''))
+  })
+
+  it('prints the trends report for the period in the URL', async () => {
+    await data()
+    const month = periodOf('month', today)
+    open(`/print/report/trends?period=month&at=${month.start}`)
+    expect(await screen.findByRole('heading', { name: `Trends: ${periodLabel(month)}` })).toBeInTheDocument()
+    expect(screen.getByText('Patients compared')).toBeInTheDocument()
+    expect(screen.getByText('Collections by mode')).toBeInTheDocument()
+    for (const t of ['Collection health', 'Follow-ups', 'Busy days & no-shows', 'Clinical trends']) {
+      expect(screen.getByRole('heading', { name: t })).toBeInTheDocument()
+    }
+    // Comparisons print as text beside each tile.
+    const visits = screen.getByText('Visits:').parentElement!
+    expect(visits).toHaveTextContent(`(— vs ${periodLabel(shiftPeriod(month, -1))}; — vs ${periodLabel(shiftPeriod(month, -12))})`)
+  })
+
+  it('shows follow-ups, busy hours and clinical trends for a past month', async () => {
+    // Two months back, so every follow-up in it is long past.
+    const month = shiftPeriod(periodOf('month', today), -2)
+    const d = (n: number) => addDays(month.start, n)
+    const back = await createPatient({ name: 'Devan' })
+    await saveVisit({ patientId: back.id, date: d(0), followUpDate: d(3), caseNotes: {}, items: [] })
+    await saveVisit({ patientId: back.id, date: d(5), caseNotes: { complaintStatus: [{ complaint: 'Cough', status: 'resolved' }] }, items: [] })
+    const lost = await createPatient({ name: 'Chitra', diagnoses: ['Migraine'] })
+    await saveVisit({ patientId: lost.id, date: d(0), followUpDate: d(3), caseNotes: {}, items: [] })
+    await insert<Appointment>(db.appointments, { patientId: back.id, start: new Date(`${d(0)}T10:15`).getTime(), end: new Date(`${d(0)}T10:30`).getTime(), status: 'done' })
+
+    open(`/reports?report=trends&period=month&at=${month.start}`)
+    await screen.findByTestId('report-trends')
+    expect(screen.getByTestId('period-label')).toHaveTextContent(periodLabel(month))
+    expect(screen.getByRole('button', { name: 'Current' })).toBeInTheDocument()
+
+    const followUps = screen.getByRole('region', { name: 'Follow-ups' })
+    expect(within(followUps).getByTestId('tile-Follow-up adherence')).toHaveTextContent('50%')
+    expect(within(followUps).getByText('1 of 2 on time')).toBeInTheDocument()
+    expect(within(followUps).getByTestId('tile-Not seen again')).toHaveTextContent('1')
+    expect(within(followUps).getByRole('link', { name: 'Chitra' })).toHaveAttribute('href', `/patients/${lost.id}`)
+
+    const busy = screen.getByRole('region', { name: 'Busy days & no-shows' })
+    const cell = within(busy).getAllByRole('cell').find((c) => c.style.backgroundColor)
+    expect(cell).toHaveTextContent('1')
+    expect(within(busy).getByRole('columnheader', { name: '10 am' })).toBeInTheDocument()
+
+    const clinical = screen.getByRole('region', { name: 'Clinical trends' })
+    expect(within(clinical).getByTestId('tile-Complaints improved')).toHaveTextContent('100%')
+    expect(within(clinical).getByRole('cell', { name: 'Migraine' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Collection health' })).toBeInTheDocument()
   })
 
   it('rejects a bad print URL', async () => {

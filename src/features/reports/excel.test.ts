@@ -4,10 +4,11 @@ import { createPatient } from '../patients/patientRepo'
 import { saveVisit } from '../visits/visitRepo'
 import { createBill } from '../billing/billingRepo'
 import { seedRemedies, seedRemedyId } from '../remedies/remedyRepo'
-import { buildReport, type ReportResult } from './reportDefs'
+import { buildReport, changeLine, formatCell, pctChange, tileChange, type ReportResult } from './reportDefs'
+import { periodOf } from '../../lib/period'
 import { buildReportWorkbook, buildSheetsWorkbook, reportFileName, safeSheetName } from './excel'
 import { allDataSheets } from './exportAll'
-import { readReportState, reportSearch } from './reportUrl'
+import { printReportPath, readReportState, reportSearch } from './reportUrl'
 
 function roundTrip(wb: XLSX.WorkBook): XLSX.WorkBook {
   const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
@@ -23,6 +24,44 @@ async function fixture() {
 }
 
 describe('Excel export', () => {
+  it('writes the Trends report with comparison sheets and signed change formats', async () => {
+    await fixture()
+    const report = await buildReport('trends', { from: '2026-10-01', to: '2026-10-31' }, '2026-11-11', periodOf('month', '2026-10-01'))
+    const wb = roundTrip(buildReportWorkbook(XLSX, report, 'Sunrise Clinic'))
+    expect(wb.SheetNames).toEqual([
+      'Summary',
+      'Patients compared',
+      'Collections compared',
+      'Per day',
+      'Collections by mode',
+      'Follow-ups due in the period',
+      'New patients not seen again',
+      'Visits by weekday',
+      'Arrivals by hour',
+      'Complaint progress',
+      'Top diagnoses',
+      'Top remedies',
+    ])
+    // The summary carries each tile's earlier values and change, then the section tiles under their titles.
+    const sum = wb.Sheets.Summary
+    const srows = XLSX.utils.sheet_to_json<unknown[]>(sum, { header: 1, blankrows: true })
+    expect(srows[2]).toEqual(['Measure', 'Value', 'September 2026', 'Change', 'October 2025', 'Change'])
+    expect(srows[3]).toEqual(['Visits', 1, 0, '', 0, ''])
+    const health = srows.findIndex((r) => r[0] === 'Collection health')
+    expect(health).toBeGreaterThan(3)
+    const rate = srows.findIndex((r) => r[0] === 'Collected ÷ billed')
+    expect(srows[rate].slice(0, 2)).toEqual(['Collected ÷ billed', 1])
+    expect(sum[XLSX.utils.encode_cell({ r: rate, c: 1 })].z).toBe('0.0%')
+    const ws = wb.Sheets['Collections compared']
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1 })
+    expect(rows[0]).toEqual(['Sunrise Clinic — Trends: October 2026 — 01 Oct 2026 to 31 Oct 2026'])
+    expect(rows[2]).toEqual(['Measure', 'October 2026', 'September 2026', 'Change', 'October 2025', 'Change'])
+    // Nothing to compare with: the change cells stay blank.
+    expect(rows[3]).toEqual(['Collected', 300.5, 0, '', 0, ''])
+    expect(ws.B4.z).toBe('#,##0.00')
+    expect(reportFileName(report)).toBe('trends-2026-10-01-to-2026-10-31.xlsx')
+  })
+
   it('writes the OP register with a title row, headers, numbers and text dates', async () => {
     const p = await fixture()
     const report = await buildReport('op-register', { from: '2026-10-01', to: '2026-10-31' })
@@ -75,7 +114,12 @@ describe('Excel export', () => {
 describe('report URL state', () => {
   const today = '2026-10-20'
   it('reads presets and custom ranges, with safe fallbacks', () => {
-    expect(readReportState(new URLSearchParams(''), today)).toEqual({ type: 'op-register', preset: 'thisMonth', range: { from: '2026-10-01', to: today } })
+    expect(readReportState(new URLSearchParams(''), today)).toEqual({
+      type: 'op-register',
+      preset: 'thisMonth',
+      range: { from: '2026-10-01', to: today },
+      period: { kind: 'month', start: '2026-10-01', fy: false },
+    })
     expect(readReportState(new URLSearchParams('report=revenue&range=lastMonth'), today)).toMatchObject({ type: 'revenue', range: { from: '2026-09-01', to: '2026-09-30' } })
     expect(readReportState(new URLSearchParams('report=x&range=custom&from=2026-10-31&to=2026-10-02'), today)).toMatchObject({
       type: 'op-register',
@@ -86,5 +130,45 @@ describe('report URL state', () => {
     const s: ReportResult['range'] = { from: '2026-01-01', to: '2026-01-31' }
     expect(reportSearch({ type: 'stock', preset: 'custom', range: s })).toBe('?report=stock&range=custom&from=2026-01-01&to=2026-01-31')
     expect(reportSearch({ type: 'stock', preset: 'today', range: s })).toBe('?report=stock&range=today')
+  })
+
+  it('keeps the Trends period in the URL, falling back to the current month', () => {
+    const read = (q: string) => readReportState(new URLSearchParams(q), today)
+    expect(read('report=trends').period).toEqual({ kind: 'month', start: '2026-10-01', fy: false })
+    expect(read('report=trends&period=quarter&at=2026-05-20&fy=1').period).toEqual({ kind: 'quarter', start: '2026-04-01', fy: true })
+    expect(read('report=trends&period=year&at=2026-02-01&fy=1').period).toEqual({ kind: 'year', start: '2025-04-01', fy: true })
+    // Bad kinds and future dates fall back to today's period.
+    expect(read('report=trends&period=decade&at=2027-01-01').period).toEqual({ kind: 'month', start: '2026-10-01', fy: false })
+    expect(read('report=trends&period=week&at=nope').period).toEqual({ kind: 'week', start: '2026-10-19', fy: false })
+
+    const period = { kind: 'quarter' as const, start: '2026-07-01', fy: true }
+    const s: ReportResult['range'] = { from: '2026-07-01', to: '2026-09-30' }
+    expect(reportSearch({ type: 'trends', preset: 'thisMonth', range: s, period })).toBe('?report=trends&period=quarter&at=2026-07-01&fy=1')
+    expect(printReportPath('trends', s, period)).toBe('/print/report/trends?period=quarter&at=2026-07-01&fy=1')
+    expect(printReportPath('revenue', s, period)).toBe('/print/report/revenue?from=2026-07-01&to=2026-09-30')
+  })
+})
+
+describe('period changes', () => {
+  it('formats a change with its sign, and gives none when there is nothing to compare with', () => {
+    expect(pctChange(120, 100)).toBeCloseTo(0.2)
+    expect(pctChange(50, 100)).toBe(-0.5)
+    expect(pctChange(5, 0)).toBeNull()
+    expect(formatCell(0.2, 'change')).toBe('+20%')
+    expect(formatCell(-0.125, 'change')).toBe('−12.5%')
+    expect(formatCell(0.0001, 'change')).toBe('0%')
+    expect(formatCell(null, 'change')).toBe('')
+  })
+
+  it('compares rates in points, and colours a rise as bad news where lower is better', () => {
+    expect(tileChange({ type: 'percent', value: 0.8 }, 0.6)).toEqual({ dir: 'up', text: '20 pts', good: true, value: 20 })
+    expect(tileChange({ type: 'percent', value: 0.3, lowerIsBetter: true }, 0.2)).toMatchObject({ dir: 'up', text: '10 pts', good: false })
+    expect(tileChange({ type: 'money', value: 800, lowerIsBetter: true }, 1000)).toMatchObject({ dir: 'down', text: '20%', good: true, value: -0.2 })
+    expect(tileChange({ type: 'int', value: 5 }, 5)).toEqual({ dir: 'flat', text: '0%', good: null, value: 0 })
+    expect(tileChange({ type: 'percent', value: null }, 0.5)).toBeNull()
+    expect(tileChange({ type: 'int', value: 3 }, 0)).toBeNull()
+    const tile = { label: 'Visits', type: 'int' as const, value: 6 }
+    expect(changeLine(tile, { label: 'October 2026', value: 4 })).toBe('▲ 50% vs October 2026')
+    expect(changeLine(tile, { label: 'November 2025', value: 0 })).toBe('— vs November 2025')
   })
 })

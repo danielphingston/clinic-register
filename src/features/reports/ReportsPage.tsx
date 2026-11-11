@@ -4,9 +4,11 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { getSettings } from '../../db/repo'
 import { presetRange, rangeLabel, RANGE_PRESETS, type RangePreset } from '../../lib/dateRange'
 import { todayISO } from '../../lib/format'
-import { buildReport, REPORTS, type ReportType } from './reportDefs'
+import { trendWindows } from '../../lib/period'
+import { buildReport, REPORTS, type ReportSection, type ReportType } from './reportDefs'
 import { printReportPath, readReportState, reportSearch } from './reportUrl'
 import { ReportTableView, Tiles } from './ReportTableView'
+import { PeriodBar } from './PeriodBar'
 import { exportReportToExcel } from './excel'
 
 const ReportChart = lazy(() => import('./ReportChart'))
@@ -15,9 +17,14 @@ export function ReportsPage() {
   const [params, setParams] = useSearchParams()
   const today = todayISO()
   const state = readReportState(params, today)
-  const { type, preset, range } = state
-  const report = useLiveQuery(async () => buildReport(type, range, today), [type, range.from, range.to, today])
-  const loaded = report && report.type === type && report.range.from === range.from && report.range.to === range.to
+  const { type, preset, period } = state
+  const trends = type === 'trends'
+  const range = trends ? trendWindows(period, today).current.range : state.range
+  // Calendar and financial quarters cover the same dates, so the key includes the period too.
+  const key = trends ? `trends|${period.kind}|${period.start}|${period.fy}|${today}` : `${type}|${range.from}|${range.to}|${today}`
+  const loadedReport = useLiveQuery(async () => ({ key, report: await buildReport(type, range, today, period) }), [key])
+  const report = loadedReport?.key === key ? loadedReport.report : undefined
+  const loaded = !!report
   const [exporting, setExporting] = useState(false)
   const [error, setError] = useState('')
   const tabs = useRef<HTMLUListElement>(null)
@@ -63,7 +70,7 @@ export function ReportsPage() {
           <button className="btn-ghost border border-slate-300" onClick={exportExcel} disabled={!loaded || exporting}>
             {exporting ? 'Exporting…' : 'Export to Excel'}
           </button>
-          <Link className="btn-primary" to={printReportPath(type, range)}>
+          <Link className="btn-primary" to={printReportPath(type, range, period)}>
             Print
           </Link>
         </div>
@@ -88,6 +95,9 @@ export function ReportsPage() {
         </ul>
       </nav>
 
+      {trends ? (
+        <PeriodBar period={period} today={today} onChange={(p) => go({ period: p })} />
+      ) : (
       <fieldset className="flex flex-wrap items-end gap-3">
         <legend className="sr-only">Date range</legend>
         <div>
@@ -123,29 +133,46 @@ export function ReportsPage() {
           </p>
         )}
       </fieldset>
+      )}
 
       {error && <p className="text-sm text-red-700">{error}</p>}
 
-      {!loaded ? (
+      {!report ? (
         <p className="text-sm text-slate-500">Loading…</p>
       ) : (
         <div className="space-y-4" data-testid={`report-${type}`}>
-          <Tiles tiles={report.tiles} />
-          {report.note && <p className="text-xs text-slate-500">{report.note}</p>}
-          {report.charts.length > 0 && (
-            <Suspense fallback={<div className="card h-60 text-sm text-slate-500">Loading chart…</div>}>
-              <div className="grid gap-4">
-                {report.charts.map((c) => (
-                  <ReportChart key={c.title} spec={c} />
-                ))}
-              </div>
-            </Suspense>
-          )}
-          {report.tables.map((t) => (
-            <ReportTableView key={t.title} table={t} />
+          <ReportPart part={report} />
+          {report.sections?.map((sec, i) => (
+            <section key={sec.title} aria-labelledby={`section-${i}`} className="space-y-4 pt-4" data-testid={`section-${sec.title}`}>
+              <h2 id={`section-${i}`} className="border-b border-slate-200 pb-1 text-lg font-semibold">
+                {sec.title}
+              </h2>
+              <ReportPart part={sec} />
+            </section>
           ))}
         </div>
       )}
     </div>
+  )
+}
+
+function ReportPart({ part }: { part: Pick<ReportSection, 'tiles' | 'note' | 'charts' | 'tables'> }) {
+  return (
+    <>
+      {part.tiles.length > 0 && <Tiles tiles={part.tiles} />}
+      {part.note && <p className="text-xs text-slate-500">{part.note}</p>}
+      {part.charts.length > 0 && (
+        <Suspense fallback={<div className="card h-60 text-sm text-slate-500">Loading chart…</div>}>
+          <div className="grid gap-4">
+            {part.charts.map((c) => (
+              <ReportChart key={c.title} spec={c} />
+            ))}
+          </div>
+        </Suspense>
+      )}
+      {part.tables.map((t) => (
+        <ReportTableView key={t.title} table={t} />
+      ))}
+    </>
   )
 }

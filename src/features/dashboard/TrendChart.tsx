@@ -1,5 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { bucketLabel, monthRange } from '../../lib/dateRange'
 import { formatDate, formatINR, parseISODate, todayISO } from '../../lib/format'
 import { dailyTrend, type DailyTrend } from '../reports/reportQueries'
@@ -97,9 +98,14 @@ export function TrendChart({ data: last30 }: { data: DailyTrend[] }) {
 
   const header = (
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <h2 id="trend-heading" className="font-semibold">
-        {title}
-      </h2>
+      <div className="flex items-baseline gap-3">
+        <h2 id="trend-heading" className="font-semibold">
+          {title}
+        </h2>
+        <Link to="/reports?report=trends&period=month" className="text-sm text-brand-700 hover:underline">
+          See trends →
+        </Link>
+      </div>
       <div className="flex items-center gap-1">
         <button type="button" className="btn-ghost border border-slate-300 px-2 py-1" aria-label="Previous month" disabled={!prev} onClick={() => prev && choose(prev)}>
           ‹
