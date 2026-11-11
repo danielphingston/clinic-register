@@ -20,7 +20,10 @@ import {
   revenueReport,
   stockReport,
   topRemedies,
+  trendsData,
 } from './reportQueries'
+import { buildReport } from './reportDefs'
+import { periodOf } from '../../lib/period'
 
 const OCT = { from: '2026-10-01', to: '2026-10-31' }
 const ARS = seedRemedyId('Arsenicum album')
@@ -163,8 +166,8 @@ describe('revenue', () => {
     expect(r.discount).toBe(20)
     expect(r.consultation).toBe(500)
     expect(r.medicine).toBe(20)
-    expect(r.buckets.find((b) => b.key === '2026-10-01')).toEqual({ key: '2026-10-01', billed: 300, collected: 450 })
-    expect(r.buckets.find((b) => b.key === '2026-10-31')).toEqual({ key: '2026-10-31', billed: 200, collected: 200 })
+    expect(r.buckets.find((b) => b.key === '2026-10-01')).toEqual({ key: '2026-10-01', billed: 300, collected: 450, byMode: { cash: 450, upi: 0, card: 0, other: 0 } })
+    expect(r.buckets.find((b) => b.key === '2026-10-31')).toEqual({ key: '2026-10-31', billed: 200, collected: 200, byMode: { cash: 0, upi: 200, card: 0, other: 0 } })
     const sumPayments = (await collectionsInRange(OCT)).reduce((s, p) => s + p.amount, 0)
     expect(sumPayments).toBe(r.collected)
   })
@@ -233,5 +236,92 @@ describe('dashboard trend', () => {
       { date: '2026-10-01', visits: 1, collected: 450 },
       { date: '2026-10-02', visits: 0, collected: 0 },
     ])
+  })
+})
+
+describe('trends', () => {
+  const TODAY = '2026-11-11'
+
+  it('totals a finished month and compares it with the month before and a year back', async () => {
+    const t = await trendsData(periodOf('month', '2026-10-01'), TODAY)
+    expect(t.windows.partial).toBe(false)
+    expect(t.granularity).toBe('day')
+    // A (first seen 30 Sep) returns; B and D are new; C is a deleted patient.
+    expect(t.current).toEqual({
+      visits: 4,
+      patients: 3,
+      newPatients: 2,
+      returning: 1,
+      collected: 650,
+      billed: 500,
+      byMode: { cash: 450, upi: 200, card: 0, other: 0 },
+    })
+    // September: A's first visit and its bill, paid only on 1 Oct.
+    expect(t.previous).toMatchObject({ visits: 1, patients: 1, newPatients: 1, returning: 0, collected: 0, billed: 300 })
+    expect(t.lastYear).toMatchObject({ visits: 0, patients: 0, collected: 0, billed: 0 })
+    expect(t.buckets).toHaveLength(31)
+    expect(t.buckets[0]).toMatchObject({ key: '2026-10-01', from: '2026-10-01', revisit: 1, visits: 1, collected: 450, billed: 300 })
+  })
+
+  it('compares a month in progress with the same days of last month', async () => {
+    const t = await trendsData(periodOf('month', '2026-11-02'), '2026-11-02')
+    expect(t.windows.partial).toBe(true)
+    expect(t.windows.previous.range).toEqual({ from: '2026-10-01', to: '2026-10-02' })
+    expect(t.current).toMatchObject({ visits: 1, patients: 1, newPatients: 0, returning: 1, collected: 50, billed: 0 })
+    expect(t.previous).toMatchObject({ visits: 1, returning: 1, collected: 450, billed: 300 })
+  })
+
+  it('buckets a quarter by week, starting the first week on the quarter\'s first day', async () => {
+    const t = await trendsData(periodOf('quarter', '2026-10-01'), TODAY)
+    expect(t.granularity).toBe('week')
+    expect(t.windows.current.range).toEqual({ from: '2026-10-01', to: '2026-11-11' })
+    expect(t.buckets[0]).toMatchObject({ key: '2026-09-28', from: '2026-10-01', visits: 1, collected: 450 })
+    expect(t.buckets.reduce((s, b) => s + b.visits, 0)).toBe(t.current.visits)
+    expect(t.buckets.reduce((s, b) => s + b.collected, 0)).toBe(t.current.collected)
+  })
+
+  it('buckets a financial year by month from April', async () => {
+    const t = await trendsData(periodOf('year', '2026-10-01', true), TODAY)
+    expect(t.windows.current.label).toBe('FY 2026–27')
+    expect(t.buckets.map((b) => b.key)).toEqual(['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11'])
+    expect(t.buckets.find((b) => b.key === '2026-10')).toMatchObject({ visits: 4, collected: 650 })
+  })
+
+  it('builds the Trends report with compared tiles, tables and charts', async () => {
+    const r = await buildReport('trends', OCT, TODAY, periodOf('month', '2026-10-01'))
+    expect(r.title).toBe('Trends: October 2026')
+    expect(r.range).toEqual(OCT)
+    const visits = r.tiles.find((t) => t.label === 'Visits')!
+    expect(visits.value).toBe(4)
+    expect(visits.compare).toEqual([
+      { label: 'September 2026', value: 1 },
+      { label: 'October 2025', value: 0 },
+    ])
+    expect(r.tiles.find((t) => t.label === 'Collected')).toMatchObject({ type: 'money', value: 650 })
+
+    const patients = r.tables.find((t) => t.title === 'Patients compared')!
+    expect(patients.columns.map((c) => c.header)).toEqual(['Measure', 'October 2026', 'September 2026', 'Change', 'October 2025', 'Change'])
+    expect(patients.rows[0]).toEqual({ metric: 'Visits', current: 4, previous: 1, vsPrevious: 3, lastYear: 0, vsLastYear: null })
+    const money = r.tables.find((t) => t.title === 'Collections compared')!
+    const billed = money.rows.find((row) => row.metric === 'Billed')!
+    expect(billed).toMatchObject({ current: 500, previous: 300 })
+    expect(billed.vsPrevious).toBeCloseTo(2 / 3)
+    const modes = r.tables.find((t) => t.title === 'Collections by mode')!
+    expect(modes.rows.map((row) => row.mode)).toEqual(['Cash', 'UPI'])
+    expect(modes.totals).toMatchObject({ current: 650 })
+
+    const collected = r.charts.find((c) => c.title === 'Collected per day')!
+    expect(collected.series.map((s) => [s.key, !!s.line])).toEqual([
+      ['cash', false],
+      ['upi', false],
+      ['billed', true],
+    ])
+    expect(r.note).toContain('Compared with September 2026 and October 2025.')
+  })
+
+  it('explains the like-for-like comparison while the period is running', async () => {
+    const r = await buildReport('trends', OCT, '2026-11-02', periodOf('month', '2026-11-02'))
+    expect(r.note).toContain('November 2026 is still running')
+    expect(r.note).toContain('01 Oct 2026 to 02 Oct 2026 and 01 Nov 2025 to 02 Nov 2025')
   })
 })

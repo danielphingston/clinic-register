@@ -3,6 +3,7 @@ import type { AppointmentStatus, Bill, BillItem, Patient, PaymentMode, Prescript
 import { ageSex, currentAge } from '../../lib/age'
 import { bucketKey, bucketKeys, granularityFor, type DateRange, type Granularity } from '../../lib/dateRange'
 import { addDays, parseISODate, toISODate } from '../../lib/format'
+import { periodGranularity, trendWindows, type Period, type TrendWindow, type TrendWindows } from '../../lib/period'
 import { remedyMap } from '../remedies/remedyRepo'
 import { duesAgeing, duesByPatient, round2, type Ageing, type PatientDueRow } from '../billing/billingRepo'
 import { stockUsage } from '../stock/stockRepo'
@@ -150,10 +151,9 @@ export interface PatientsSummary {
   byAge: Record<AgeBand, number> // distinct patients, age at their first visit in the range
 }
 
-export async function patientsSummary(range: DateRange): Promise<PatientsSummary> {
+export async function patientsSummary(range: DateRange, granularity: Granularity = granularityFor(range)): Promise<PatientsSummary> {
   const { visits, patients } = await visitsInRange(range)
   const firsts = await firstVisitIds(patients.keys())
-  const granularity = granularityFor(range)
   const buckets = new Map(bucketKeys(range, granularity).map((k) => [k, { key: k, newCount: 0, revisit: 0, total: 0 }]))
   const bySex: PatientsSummary['bySex'] = { M: 0, F: 0, O: 0, U: 0 }
   const byAge = Object.fromEntries(AGE_BANDS.map((b) => [b, 0])) as Record<AgeBand, number>
@@ -190,6 +190,7 @@ export interface RevenueBucket {
   key: string
   billed: number
   collected: number
+  byMode: Record<PaymentMode, number> // collected, split by payment mode
 }
 
 export interface RevenueReport {
@@ -205,12 +206,13 @@ export interface RevenueReport {
   buckets: RevenueBucket[]
 }
 
-export async function revenueReport(range: DateRange): Promise<RevenueReport> {
-  const granularity = granularityFor(range)
+const noModes = (): Record<PaymentMode, number> => ({ cash: 0, upi: 0, card: 0, other: 0 })
+
+export async function revenueReport(range: DateRange, granularity: Granularity = granularityFor(range)): Promise<RevenueReport> {
   const bills = await liveBillsInRange(range)
   const payments = await collectionsInRange(range)
   const isMedicine = medicineMatcher((await remedyMap()).values())
-  const buckets = new Map(bucketKeys(range, granularity).map((k) => [k, { key: k, billed: 0, collected: 0 }]))
+  const buckets = new Map(bucketKeys(range, granularity).map((k) => [k, { key: k, billed: 0, collected: 0, byMode: noModes() }]))
   const out: RevenueReport = {
     granularity,
     billed: 0,
@@ -220,7 +222,7 @@ export async function revenueReport(range: DateRange): Promise<RevenueReport> {
     medicine: 0,
     billCount: bills.length,
     paymentCount: payments.length,
-    byMode: { cash: 0, upi: 0, card: 0, other: 0 },
+    byMode: noModes(),
     buckets: [],
   }
   for (const b of bills) {
@@ -235,11 +237,18 @@ export async function revenueReport(range: DateRange): Promise<RevenueReport> {
   for (const p of payments) {
     out.collected += p.amount
     out.byMode[p.mode] += p.amount
-    buckets.get(bucketKey(p.date, granularity))!.collected += p.amount
+    const b = buckets.get(bucketKey(p.date, granularity))!
+    b.collected += p.amount
+    b.byMode[p.mode] += p.amount
   }
   for (const k of ['billed', 'collected', 'discount', 'consultation', 'medicine'] as const) out[k] = round2(out[k])
   for (const m of Object.keys(out.byMode) as PaymentMode[]) out.byMode[m] = round2(out.byMode[m])
-  out.buckets = [...buckets.values()].map((b) => ({ ...b, billed: round2(b.billed), collected: round2(b.collected) }))
+  out.buckets = [...buckets.values()].map((b) => ({
+    ...b,
+    billed: round2(b.billed),
+    collected: round2(b.collected),
+    byMode: Object.fromEntries(Object.entries(b.byMode).map(([m, v]) => [m, round2(v)])) as Record<PaymentMode, number>,
+  }))
   return out
 }
 
@@ -417,6 +426,84 @@ export async function dailyTrend(range: DateRange): Promise<DailyTrend[]> {
   for (const v of visits) days.get(v.date)!.visits++
   for (const p of payments) days.get(p.date)!.collected += p.amount
   return [...days.values()].map((d) => ({ ...d, collected: round2(d.collected) }))
+}
+
+// ---- trends ----
+
+export interface TrendTotals {
+  visits: number
+  patients: number // distinct patients seen
+  newPatients: number // first-ever visit in the window
+  returning: number // seen in the window, first visit before it
+  collected: number
+  billed: number
+  byMode: Record<PaymentMode, number>
+}
+
+export interface TrendsBucket {
+  key: string // day, Monday of the week, or "YYYY-MM"
+  from: string // first day of the bucket inside the period
+  newCount: number
+  revisit: number
+  visits: number
+  collected: number
+  billed: number
+  byMode: Record<PaymentMode, number>
+}
+
+export interface TrendsData {
+  windows: TrendWindows
+  granularity: Granularity
+  current: TrendTotals
+  previous: TrendTotals
+  lastYear: TrendTotals
+  buckets: TrendsBucket[]
+}
+
+function trendTotals(p: PatientsSummary, r: RevenueReport): TrendTotals {
+  return {
+    visits: p.visits,
+    patients: p.distinctPatients,
+    newPatients: p.newCount,
+    returning: p.distinctPatients - p.newCount,
+    collected: r.collected,
+    billed: r.billed,
+    byMode: r.byMode,
+  }
+}
+
+// One period, bucketed for charts, plus totals for the previous period and the
+// same period last year (like for like while the period is in progress).
+export async function trendsData(period: Period, today: string): Promise<TrendsData> {
+  const windows = trendWindows(period, today)
+  const granularity = periodGranularity(period.kind)
+  const { range } = windows.current
+  const p = await patientsSummary(range, granularity)
+  const r = await revenueReport(range, granularity)
+  // Comparisons only need totals; month buckets keep them cheap.
+  const totals = async (w: TrendWindow) => trendTotals(await patientsSummary(w.range, 'month'), await revenueReport(w.range, 'month'))
+  const money = new Map(r.buckets.map((b) => [b.key, b]))
+  return {
+    windows,
+    granularity,
+    current: trendTotals(p, r),
+    previous: await totals(windows.previous),
+    lastYear: await totals(windows.lastYear),
+    buckets: p.buckets.map((b) => {
+      const m = money.get(b.key)!
+      const first = granularity === 'month' ? `${b.key}-01` : b.key
+      return {
+        key: b.key,
+        from: first < range.from ? range.from : first,
+        newCount: b.newCount,
+        revisit: b.revisit,
+        visits: b.total,
+        collected: m.collected,
+        billed: m.billed,
+        byMode: m.byMode,
+      }
+    }),
+  }
 }
 
 // ---- helpers ----

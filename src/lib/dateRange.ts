@@ -59,15 +59,22 @@ export function rangeDays(r: DateRange): number {
   return daysBetween(r.from, r.to) + 1
 }
 
-// Charts and summaries switch from days to months for long ranges.
-export type Granularity = 'day' | 'month'
+// Charts and summaries switch from days to months for long ranges. Weekly
+// buckets are only used when asked for (the Trends report's quarters).
+export type Granularity = 'day' | 'week' | 'month'
 
-export function granularityFor(r: DateRange): Granularity {
+// Monday of the week holding `iso`.
+export function mondayOf(iso: string): string {
+  return addDays(iso, -((parseISODate(iso).getDay() + 6) % 7))
+}
+
+export function granularityFor(r: DateRange): 'day' | 'month' {
   return rangeDays(r) > 62 ? 'month' : 'day'
 }
 
+// A week's key is its Monday, which can fall before the range's first day.
 export function bucketKey(iso: string, g: Granularity): string {
-  return g === 'day' ? iso : iso.slice(0, 7)
+  return g === 'day' ? iso : g === 'week' ? mondayOf(iso) : iso.slice(0, 7)
 }
 
 // Every bucket key in the range, so empty days/months still appear.
@@ -76,6 +83,10 @@ export function bucketKeys(r: DateRange, g: Granularity): string[] {
   if (r.from > r.to) return out
   if (g === 'day') {
     for (let d = r.from; d <= r.to; d = addDays(d, 1)) out.push(d)
+    return out
+  }
+  if (g === 'week') {
+    for (let d = mondayOf(r.from); d <= r.to; d = addDays(d, 7)) out.push(d)
     return out
   }
   const start = parseISODate(r.from)

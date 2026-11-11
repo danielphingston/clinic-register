@@ -8,6 +8,15 @@
 4. **Billing**: the bill is prefilled with the consultation fee and the dispensed medicines. Enter the amount paid now. Any balance gets a due date and appears under **Billing → Dues**. Use **+ Medicine from stock** for a counter sale; voiding or editing the bill returns the stock.
 5. **Evening**: review **Reports → OP Register** for the day and today's collection on the dashboard.
 
+## Trends
+
+**Reports → Trends** (or **See trends →** on the dashboard's chart) shows how the clinic is doing over a **Week**, **Month**, **Quarter** or **Year**. For quarters and years, choose **Calendar (Jan–Dec)** or **Financial (Apr–Mar)**. Use **‹** and **›** to move to the previous or next period, and **Current** to come back.
+
+- **Tiles**: visits, patients seen, new patients (first-ever visit in the period), returning patients, amount collected (payments received, whatever the bill date) and amount billed. Under each is the change against the previous period and the same period last year, such as "▲ 12% vs October 2026". Hover or long-press it to see the earlier figure. "—" means there was nothing to compare with.
+- **A period still in progress** is compared like for like: 1–11 November is compared with 1–11 October and 1–11 November last year, not with the whole of October.
+- **Charts**: visits per day (per week for a quarter, per month for a year) split into new and revisit, and money collected by payment mode, with the amount billed as a dashed line.
+- **Tables**: the comparisons with the earlier figures, the per-day (or week, or month) numbers, and collections by mode. **Print** and **Export to Excel** include all of them.
+
 ## Case notes
 
 - **Complaints**: each complaint is a card with the **Complaint** (one line, e.g. "Throbbing headache, right temple"), its **Duration** (e.g. 3 months), any number of **Aggravation (<)** and **Amelioration (>)** entries, and what the complaint started after under **Ailments from (A/F)**. For these, type an entry and press Enter or **Add**, or tap a quick pick (Morning, Cold, Open air, Motion and so on; Grief, Fright, Injury and so on for ailments from) to add it; tap it again, or the × on its chip, to remove it. Terms you used in earlier visits are suggested as you type. Press **+ Add complaint** for another card and **×** to remove one. Each card is also saved as one summary line, such as "Throbbing headache, right temple; since 3 months; < sun, noise; > pressure; A/F grief", which is what appears on prescriptions, certificates, reports and the visit history. Complaints saved as plain lines before the cards existed open as cards with the line in **Complaint**. There is no separate Modalities tab. Modalities notes saved on older visits are no longer shown in the visit form, but they stay in the record and in **Export all data**.

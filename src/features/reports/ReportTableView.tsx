@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
-import { formatCell, formatTile, type ColType, type ReportTable, type Tile } from './reportDefs'
+import { formatCell, formatTile, pctChange, type ColType, type ReportTable, type Tile } from './reportDefs'
 
-const NUMERIC: ColType[] = ['int', 'money', 'qty', 'percent']
+const NUMERIC: ColType[] = ['int', 'money', 'qty', 'percent', 'change']
 const TONE = { warn: 'bg-amber-50', bad: 'bg-red-50' }
 
 export function ReportTableView({ table, print = false }: { table: ReportTable; print?: boolean }) {
@@ -92,7 +92,8 @@ export function Tiles({ tiles, print = false }: { tiles: Tile[]; print?: boolean
     )
   }
   return (
-    <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+    // Six tiles go 3 + 3 or one row, never 5 + 1.
+    <dl className={`grid grid-cols-2 gap-3 sm:grid-cols-3 ${tiles.length === 6 ? '2xl:grid-cols-6' : 'lg:grid-cols-5'}`}>
       {tiles.map((t) => (
         <div key={t.label} className="card">
           <dt className="text-sm text-slate-500">{t.label}</dt>
@@ -100,8 +101,33 @@ export function Tiles({ tiles, print = false }: { tiles: Tile[]; print?: boolean
             {formatTile(t)}
           </dd>
           {t.hint && <dd className="text-xs text-slate-500">{t.hint}</dd>}
+          {t.compare?.map((c) => (
+            <dd key={c.label} className="mt-0.5 text-xs" data-testid={`tile-${t.label}-vs`} title={`${c.label}: ${formatCell(c.value, t.type)}`}>
+              <Change value={pctChange(t.value, c.value)} /> <span className="text-slate-500">vs {c.label}</span>
+            </dd>
+          ))}
         </div>
       ))}
     </dl>
+  )
+}
+
+// "▲ 12%" in green, "▼ 5%" in red; "—" when the earlier period had nothing.
+function Change({ value }: { value: number | null }) {
+  if (value == null) return <span className="font-medium text-slate-500">—</span>
+  const text = formatCell(Math.abs(value), 'percent')
+  if (Math.round(value * 1000) === 0) return <span className="font-medium text-slate-600">± 0%</span>
+  return value > 0 ? (
+    <span className="font-medium text-emerald-700">
+      <span aria-hidden="true">▲ </span>
+      <span className="sr-only">up </span>
+      {text}
+    </span>
+  ) : (
+    <span className="font-medium text-red-700">
+      <span aria-hidden="true">▼ </span>
+      <span className="sr-only">down </span>
+      {text}
+    </span>
   )
 }

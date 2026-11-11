@@ -2,6 +2,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { isISODate, rangeLabel } from '../lib/dateRange'
 import { formatDate, todayISO } from '../lib/format'
+import { trendWindows } from '../lib/period'
+import { readPeriod } from '../features/reports/reportUrl'
 import { buildReport, isReportType, REPORT_LABEL } from '../features/reports/reportDefs'
 import { ReportTableView, Tiles } from '../features/reports/ReportTableView'
 import { Letterhead, PrintShell } from './PrintShell'
@@ -12,17 +14,21 @@ export default function PrintReport() {
   const today = todayISO()
   const from = params.get('from')
   const to = params.get('to')
-  const valid = isReportType(type) && isISODate(from) && isISODate(to) && from <= to
+  // Trends is printed by period (?period=…&at=…&fy=1), the rest by date range.
+  const trends = type === 'trends'
+  const period = readPeriod(params, today)
+  const range = trends ? trendWindows(period, today).current.range : { from: from!, to: to! }
+  const valid = isReportType(type) && (trends || (isISODate(from) && isISODate(to) && from <= to))
   const report = useLiveQuery(
-    async () => (valid ? buildReport(type, { from: from!, to: to! }, today) : Promise.resolve(null)),
-    [type, from, to, today, valid],
+    async () => (valid ? buildReport(type, range, today, period) : Promise.resolve(null)),
+    [type, range.from, range.to, period.kind, period.fy, today, valid],
   )
 
   if (!valid) return <div className="p-6 text-sm">Unknown report or date range.</div>
   if (!report) return null
 
   return (
-    <PrintShell title={`${REPORT_LABEL[type]} ${from} to ${to}`} ready landscape={type === 'op-register'}>
+    <PrintShell title={`${REPORT_LABEL[type]} ${range.from} to ${range.to}`} ready landscape={type === 'op-register'}>
       <Letterhead />
       <div className="mt-3 flex items-baseline justify-between gap-4">
         <h1 className="text-[14pt] font-bold">{report.title}</h1>

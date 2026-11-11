@@ -1,4 +1,4 @@
-import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { formatINR } from '../../lib/format'
 import type { ChartSpec } from './reportDefs'
 
@@ -49,6 +49,20 @@ export default function ReportChart({ spec }: { spec: ChartSpec }) {
   }
   const xAxis = <XAxis dataKey={spec.xKey} tick={AXIS} interval="preserveStartEnd" minTickGap={16} tickLine={false} />
   const yAxis = <YAxis tick={AXIS} width={spec.money ? 52 : 32} allowDecimals={false} tickFormatter={tick} axisLine={false} tickLine={false} />
+  const bars = spec.series.filter((s) => !s.line)
+  const lines = spec.series.filter((s) => s.line)
+  const barMarks = bars.map((s, i) => (
+    <Bar
+      key={s.key}
+      dataKey={s.key}
+      name={s.label}
+      fill={s.color}
+      stackId={spec.stacked ? 'a' : undefined}
+      isAnimationActive={false}
+      radius={!spec.stacked || i === bars.length - 1 ? [4, 4, 0, 0] : 0}
+      maxBarSize={36}
+    />
+  ))
 
   return (
     <figure className="card" aria-label={spec.title}>
@@ -66,6 +80,19 @@ export default function ReportChart({ spec }: { spec: ChartSpec }) {
                 <Line key={s.key} type="linear" isAnimationActive={false} dataKey={s.key} name={s.label} stroke={s.color} strokeWidth={2} dot={spec.data.length <= 31 ? { r: 2 } : false} activeDot={{ r: 4 }} />
               ))}
             </LineChart>
+          ) : lines.length ? (
+            // Bars with a line on top, e.g. collected by mode with billed as a line.
+            <ComposedChart {...common} barGap={2}>
+              <CartesianGrid vertical={false} stroke={GRID} />
+              {xAxis}
+              {yAxis}
+              {tooltip}
+              {legend && <Legend wrapperStyle={{ fontSize: 12 }} />}
+              {barMarks}
+              {lines.map((s) => (
+                <Line key={s.key} type="linear" isAnimationActive={false} dataKey={s.key} name={s.label} stroke={s.color} strokeWidth={2} strokeDasharray="4 3" dot={spec.data.length <= 31 ? { r: 2 } : false} activeDot={{ r: 4 }} />
+              ))}
+            </ComposedChart>
           ) : (
             <BarChart {...common} barGap={2}>
               <CartesianGrid vertical={false} stroke={GRID} />
@@ -73,18 +100,7 @@ export default function ReportChart({ spec }: { spec: ChartSpec }) {
               {yAxis}
               {tooltip}
               {legend && <Legend wrapperStyle={{ fontSize: 12 }} />}
-              {spec.series.map((s, i) => (
-                <Bar
-                  key={s.key}
-                  dataKey={s.key}
-                  name={s.label}
-                  fill={s.color}
-                  stackId={spec.stacked ? 'a' : undefined}
-                  isAnimationActive={false}
-                  radius={!spec.stacked || i === spec.series.length - 1 ? [4, 4, 0, 0] : 0}
-                  maxBarSize={36}
-                />
-              ))}
+              {barMarks}
             </BarChart>
           )}
         </ResponsiveContainer>

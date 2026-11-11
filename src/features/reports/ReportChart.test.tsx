@@ -40,4 +40,30 @@ describe('ReportChart', () => {
     )
     expect(screen.getByRole('figure', { name: `Chart ${kind}` })).toBeInTheDocument()
   })
+
+  it('draws a line series over stacked bars', () => {
+    const { container } = render(
+      <ReportChart
+        spec={{
+          kind: 'bar',
+          stacked: true,
+          title: 'Collected per day',
+          xKey: 'x',
+          money: true,
+          data: [
+            { x: '1 Oct', cash: 300, upi: 200, billed: 600 },
+            { x: '2 Oct', cash: 100, upi: 0, billed: 100 },
+          ],
+          series: [
+            { key: 'cash', label: 'Cash', color: '#17805e' },
+            { key: 'upi', label: 'UPI', color: '#c2410c' },
+            { key: 'billed', label: 'Billed', color: '#64748b', line: true },
+          ],
+        }}
+      />,
+    )
+    expect(screen.getByRole('figure', { name: 'Collected per day' })).toBeInTheDocument()
+    expect(container.querySelectorAll('.recharts-bar-rectangle').length).toBeGreaterThan(0)
+    expect(container.querySelector('.recharts-line-curve')).toHaveAttribute('stroke', '#64748b')
+  })
 })

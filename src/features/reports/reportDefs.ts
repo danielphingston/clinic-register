@@ -1,5 +1,7 @@
-import { bucketLabel, type DateRange } from '../../lib/dateRange'
+import { bucketLabel, rangeLabel, type DateRange } from '../../lib/dateRange'
+import { periodOf, type Period } from '../../lib/period'
 import { formatDate, formatINR, todayISO } from '../../lib/format'
+import type { PaymentMode } from '../../db/types'
 import { AGEING_LABEL, MODE_LABEL, type AgeingKey } from '../billing/billingRepo'
 import { STATUS_LABEL } from '../appointments/appointmentRepo'
 import { FORM_LABEL, formatQty } from '../stock/stockLogic'
@@ -12,15 +14,18 @@ import {
   revenueReport,
   stockReport,
   topRemedies,
+  trendsData,
+  type TrendTotals,
 } from './reportQueries'
 
 // A report rendered as data, so the screen, the print view and the Excel
 // export all show the same thing.
 
-export type ReportType = 'op-register' | 'patients' | 'revenue' | 'dues' | 'top-remedies' | 'stock' | 'appointments'
+export type ReportType = 'op-register' | 'trends' | 'patients' | 'revenue' | 'dues' | 'top-remedies' | 'stock' | 'appointments'
 
 export const REPORTS: { type: ReportType; label: string }[] = [
   { type: 'op-register', label: 'OP Register' },
+  { type: 'trends', label: 'Trends' },
   { type: 'patients', label: 'Patients' },
   { type: 'revenue', label: 'Revenue' },
   { type: 'dues', label: 'Dues' },
@@ -35,7 +40,8 @@ export function isReportType(s: string | null | undefined): s is ReportType {
   return !!s && s in REPORT_LABEL
 }
 
-export type ColType = 'text' | 'int' | 'money' | 'qty' | 'date' | 'percent'
+// 'change' is a signed fraction (0.12 = +12%), for period-on-period changes.
+export type ColType = 'text' | 'int' | 'money' | 'qty' | 'date' | 'percent' | 'change'
 export type Cell = string | number | null
 
 export interface Column {
@@ -60,12 +66,16 @@ export interface Tile {
   value: number
   type: 'int' | 'money' | 'percent'
   hint?: string
+  // Earlier periods to compare with, shown as a change on screen.
+  compare?: { label: string; value: number }[]
 }
 
 export interface ChartSeries {
   key: string
   label: string
   color: string
+  // Drawn as a line over the bars of a 'bar' chart.
+  line?: boolean
 }
 
 export interface ChartSpec {
@@ -101,9 +111,19 @@ export function formatCell(v: Cell, type: ColType): string {
       return formatQty(v)
     case 'percent':
       return `${Math.round(v * 1000) / 10}%`
+    case 'change': {
+      const pct = Math.round(Math.abs(v) * 1000) / 10
+      return pct === 0 ? '0%' : `${v > 0 ? '+' : '−'}${pct}%`
+    }
     default:
       return String(v)
   }
+}
+
+// Change from `prev` to `cur` as a fraction; null when there is nothing to
+// compare with (prev is 0).
+export function pctChange(cur: number, prev: number): number | null {
+  return prev === 0 ? null : (cur - prev) / prev
 }
 
 export function formatTile(t: Tile): string {
@@ -112,9 +132,13 @@ export function formatTile(t: Tile): string {
 
 const sumBy = (rows: Record<string, Cell>[], key: string) => Math.round(rows.reduce((s, r) => s + (Number(r[key]) || 0), 0) * 100) / 100
 
-export async function buildReport(type: ReportType, range: DateRange, today = todayISO()): Promise<ReportResult> {
+// `period` is used by the Trends report only (default: the current month);
+// the other reports use `range`.
+export async function buildReport(type: ReportType, range: DateRange, today = todayISO(), period?: Period): Promise<ReportResult> {
   const base = { type, title: REPORT_LABEL[type], range }
   switch (type) {
+    case 'trends':
+      return trendsReport(period ?? periodOf('month', today), today)
     case 'op-register': {
       const rows = await opRegister(range)
       const table: ReportTable = {
@@ -470,5 +494,136 @@ export async function buildReport(type: ReportType, range: DateRange, today = to
         ],
       }
     }
+  }
+}
+
+// ---- trends ----
+
+const MODES: PaymentMode[] = ['cash', 'upi', 'card', 'other']
+
+const TREND_METRICS: { key: Exclude<keyof TrendTotals, 'byMode'>; label: string; money: boolean }[] = [
+  { key: 'visits', label: 'Visits', money: false },
+  { key: 'patients', label: 'Patients seen', money: false },
+  { key: 'newPatients', label: 'New patients', money: false },
+  { key: 'returning', label: 'Returning patients', money: false },
+  { key: 'collected', label: 'Collected', money: true },
+  { key: 'billed', label: 'Billed', money: true },
+]
+
+async function trendsReport(period: Period, today: string): Promise<ReportResult> {
+  const t = await trendsData(period, today)
+  const { current: cw, previous: pw, lastYear: lw } = t.windows
+  const g = t.granularity
+  const unit = g === 'day' ? 'day' : g === 'week' ? 'week' : 'month'
+  const label = (b: (typeof t.buckets)[number]) => (g === 'month' ? bucketLabel(b.key) : bucketLabel(b.from))
+  const compareTable = (title: string, money: boolean): ReportTable => {
+    const type = money ? 'money' : 'int'
+    return {
+      title,
+      columns: [
+        { key: 'metric', header: 'Measure', type: 'text' },
+        { key: 'current', header: cw.label, type },
+        { key: 'previous', header: pw.label, type },
+        { key: 'vsPrevious', header: 'Change', type: 'change' },
+        { key: 'lastYear', header: lw.label, type },
+        { key: 'vsLastYear', header: 'Change', type: 'change' },
+      ],
+      rows: TREND_METRICS.filter((m) => m.money === money).map((m) => ({
+        metric: m.label,
+        current: t.current[m.key],
+        previous: t.previous[m.key],
+        vsPrevious: pctChange(t.current[m.key], t.previous[m.key]),
+        lastYear: t.lastYear[m.key],
+        vsLastYear: pctChange(t.current[m.key], t.lastYear[m.key]),
+      })),
+    }
+  }
+  const modes = MODES.filter((m) => t.current.byMode[m] || t.previous.byMode[m] || t.lastYear.byMode[m])
+  const collected = t.current.collected || 1
+  const inProgress = t.windows.partial
+    ? `${cw.label} is still running, so it is counted to today and compared with the same days of the earlier periods: ${rangeLabel(pw.range)} and ${rangeLabel(lw.range)}.`
+    : `Compared with ${pw.label} and ${lw.label}.`
+
+  return {
+    type: 'trends',
+    title: `Trends: ${cw.label}`,
+    range: cw.range,
+    note: `${inProgress} Collected = payments received, whatever the bill date. Billed = bills dated in the period, after discount. New patients = first-ever visit in the period; returning = seen in the period, first visit earlier.`,
+    tiles: TREND_METRICS.map((m) => ({
+      label: m.label,
+      value: t.current[m.key],
+      type: m.money ? 'money' : 'int',
+      compare: [
+        { label: pw.label, value: t.previous[m.key] },
+        { label: lw.label, value: t.lastYear[m.key] },
+      ],
+    })),
+    charts: [
+      {
+        kind: 'bar',
+        stacked: true,
+        title: `Visits per ${unit}`,
+        xKey: 'x',
+        data: t.buckets.map((b) => ({ x: label(b), newCount: b.newCount, revisit: b.revisit })),
+        series: [
+          { key: 'newCount', label: 'New', color: SERIES_COLORS[0] },
+          { key: 'revisit', label: 'Revisit', color: SERIES_COLORS[2] },
+        ],
+      },
+      {
+        kind: 'bar',
+        stacked: true,
+        money: true,
+        title: `Collected per ${unit}`,
+        xKey: 'x',
+        data: t.buckets.map((b) => ({ x: label(b), billed: b.billed, ...b.byMode })),
+        series: [
+          ...(modes.length ? modes : (['cash'] as PaymentMode[])).map((m) => ({ key: m, label: MODE_LABEL[m], color: SERIES_COLORS[MODES.indexOf(m)] })),
+          { key: 'billed', label: 'Billed', color: '#64748b', line: true },
+        ],
+      },
+    ],
+    tables: [
+      compareTable('Patients compared', false),
+      compareTable('Collections compared', true),
+      {
+        title: `Per ${unit}`,
+        columns: [
+          { key: 'label', header: g === 'day' ? 'Date' : g === 'week' ? 'Week from' : 'Month', type: g === 'month' ? 'text' : 'date' },
+          { key: 'newCount', header: 'New', type: 'int' },
+          { key: 'revisit', header: 'Revisit', type: 'int' },
+          { key: 'visits', header: 'Visits', type: 'int' },
+          { key: 'collected', header: 'Collected', type: 'money' },
+          { key: 'billed', header: 'Billed', type: 'money' },
+        ],
+        rows: t.buckets.map((b) => ({
+          label: g === 'month' ? bucketLabel(b.key) : b.from,
+          newCount: b.newCount,
+          revisit: b.revisit,
+          visits: b.visits,
+          collected: b.collected,
+          billed: b.billed,
+        })),
+        totals: { label: 'Total', newCount: t.current.newPatients, revisit: t.current.visits - t.current.newPatients, visits: t.current.visits, collected: t.current.collected, billed: t.current.billed },
+      },
+      {
+        title: 'Collections by mode',
+        columns: [
+          { key: 'mode', header: 'Mode', type: 'text' },
+          { key: 'current', header: cw.label, type: 'money' },
+          { key: 'share', header: 'Share', type: 'percent' },
+          { key: 'previous', header: pw.label, type: 'money' },
+          { key: 'lastYear', header: lw.label, type: 'money' },
+        ],
+        rows: modes.map((m) => ({
+          mode: MODE_LABEL[m],
+          current: t.current.byMode[m],
+          share: t.current.byMode[m] / collected,
+          previous: t.previous.byMode[m],
+          lastYear: t.lastYear.byMode[m],
+        })),
+        totals: { mode: 'Total', current: t.current.collected, previous: t.previous.collected, lastYear: t.lastYear.collected },
+      },
+    ],
   }
 }

@@ -56,4 +56,15 @@ describe('dashboard live updates', () => {
     await user.selectOptions(within(cur).getByRole('combobox', { name: 'Period' }), '')
     expect(await screen.findByRole('region', { name: 'Last 30 days' })).toBeInTheDocument()
   })
+
+  it('links from the trend card to the Trends report', async () => {
+    localStorage.setItem('auth:profile', JSON.stringify({ sub: '1', email: 'd@x.com', name: 'D' }))
+    render(<App />)
+    const user = userEvent.setup()
+    const trend = await screen.findByRole('region', { name: 'Last 30 days' })
+    const link = within(trend).getByRole('link', { name: 'See trends →' })
+    expect(link).toHaveAttribute('href', '/reports?report=trends&period=month')
+    await user.click(link)
+    expect(await screen.findByTestId('period-bar')).toBeInTheDocument()
+  })
 })

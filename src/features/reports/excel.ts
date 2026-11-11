@@ -12,6 +12,7 @@ const NUMBER_FORMAT: Partial<Record<ColType, string>> = {
   money: '#,##0.00',
   qty: '#,##0.###',
   percent: '0.0%',
+  change: '+0.0%;-0.0%;0.0%',
   int: '0',
 }
 
