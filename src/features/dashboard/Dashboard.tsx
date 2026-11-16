@@ -13,6 +13,7 @@ import { lowStockItems } from '../stock/stockRepo'
 import { formatQty } from '../stock/stockLogic'
 import { addDays } from '../../lib/format'
 import { dailyTrend } from '../reports/reportQueries'
+import { monthProfit } from '../reports/profitQueries'
 import { TrendChart } from './TrendChart'
 
 function Stat({ label, value }: { label: string; value: string | number }) {
@@ -21,6 +22,24 @@ function Stat({ label, value }: { label: string; value: string | number }) {
       <div className="text-sm text-slate-500">{label}</div>
       <div className="mt-1 text-2xl font-semibold">{value}</div>
     </div>
+  )
+}
+
+// Collected less expenses this month so far, against the same days of last month.
+function ProfitStat({ today }: { today: string }) {
+  const p = useLiveQuery(async () => monthProfit(today), [today])
+  // Against a loss, a % change reads backwards; compare only from a profit.
+  const change = p && p.previous > 0 ? (p.net - p.previous) / p.previous : null
+  return (
+    <Link to={`/reports?report=profit&period=month&at=${today.slice(0, 8)}01`} className="card block hover:border-brand-500" data-testid="profit-stat">
+      <div className="text-sm text-slate-500">Net profit this month</div>
+      <div className={`mt-1 text-2xl font-semibold ${p && p.net < 0 ? 'text-red-700' : ''}`}>{p ? formatINR(p.net) : '—'}</div>
+      {change != null && Math.round(change * 100) !== 0 && (
+        <div className={`mt-1 text-xs ${change > 0 ? 'text-brand-700' : 'text-red-700'}`}>
+          {change > 0 ? '▲' : '▼'} {Math.abs(Math.round(change * 100))}% vs {p!.previousLabel}
+        </div>
+      )}
+    </Link>
   )
 }
 
@@ -64,13 +83,14 @@ export function Dashboard() {
         </div>
       )}
 
-      <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
+      <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
         <Stat label="Visits today" value={seenToday ?? '—'} />
         <Stat label="Visits this month" value={monthVisits ?? '—'} />
         <Stat label="Total patients" value={patientCount} />
         <Stat label="Today's appointments" value={apptCount ?? '—'} />
         <Stat label="Today's collection" value={collection ? formatINR(collection.total) : '—'} />
         <Stat label="Outstanding dues" value={outstanding == null ? '—' : formatINR(outstanding)} />
+        <ProfitStat today={today} />
       </div>
 
       <div className="mt-4">

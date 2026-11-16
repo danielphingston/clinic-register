@@ -32,7 +32,21 @@ export async function loadReminderData(d: Dexie, today: string): Promise<Reminde
   ])
   const patientIds = new Set<string>([...pids, ...appointments.map((a) => a.patientId), ...bills.map((b) => b.patientId)])
   const patients = (await d.table('patients').bulkGet([...patientIds])).filter(Boolean)
-  return { patients, appointments, visits, bills, stockItems }
+  return { patients, appointments, visits, bills, stockItems, ...(await loadRecurring(d)) }
+}
+
+// The service worker opens the database without a schema, so a database not
+// yet upgraded to expenses has no such tables.
+async function loadRecurring(d: Dexie): Promise<Pick<ReminderData, 'recurringExpenses' | 'recurringPaid'>> {
+  try {
+    const [recurringExpenses, recurringPaid] = await Promise.all([
+      d.table('recurringExpenses').where('deleted').equals(0).toArray(),
+      d.table('expenses').where('recurringId').above('').toArray(),
+    ])
+    return { recurringExpenses, recurringPaid }
+  } catch {
+    return {}
+  }
 }
 
 export async function reminderCounts(d: Dexie, now = new Date()): Promise<ReminderCounts> {

@@ -5,7 +5,8 @@ import { getSettings } from '../../db/repo'
 import { presetRange, rangeLabel, RANGE_PRESETS, type RangePreset } from '../../lib/dateRange'
 import { todayISO } from '../../lib/format'
 import { trendWindows } from '../../lib/period'
-import { buildReport, REPORTS, type ReportSection, type ReportType } from './reportDefs'
+import { buildReport, isPeriodReport, REPORTS, type ReportSection, type ReportType } from './reportDefs'
+import { BASIS_LABEL, type ProfitBasis } from './profitQueries'
 import { printReportPath, readReportState, reportSearch } from './reportUrl'
 import { ReportTableView, Tiles } from './ReportTableView'
 import { PeriodBar } from './PeriodBar'
@@ -17,12 +18,12 @@ export function ReportsPage() {
   const [params, setParams] = useSearchParams()
   const today = todayISO()
   const state = readReportState(params, today)
-  const { type, preset, period } = state
-  const trends = type === 'trends'
-  const range = trends ? trendWindows(period, today).current.range : state.range
+  const { type, preset, period, basis } = state
+  const byPeriod = isPeriodReport(type)
+  const range = byPeriod ? trendWindows(period, today).current.range : state.range
   // Calendar and financial quarters cover the same dates, so the key includes the period too.
-  const key = trends ? `trends|${period.kind}|${period.start}|${period.fy}|${today}` : `${type}|${range.from}|${range.to}|${today}`
-  const loadedReport = useLiveQuery(async () => ({ key, report: await buildReport(type, range, today, period) }), [key])
+  const key = byPeriod ? `${type}|${period.kind}|${period.start}|${period.fy}|${basis}|${today}` : `${type}|${range.from}|${range.to}|${today}`
+  const loadedReport = useLiveQuery(async () => ({ key, report: await buildReport(type, range, today, period, basis) }), [key])
   const report = loadedReport?.key === key ? loadedReport.report : undefined
   const loaded = !!report
   const [exporting, setExporting] = useState(false)
@@ -70,7 +71,7 @@ export function ReportsPage() {
           <button className="btn-ghost border border-slate-300" onClick={exportExcel} disabled={!loaded || exporting}>
             {exporting ? 'Exporting…' : 'Export to Excel'}
           </button>
-          <Link className="btn-primary" to={printReportPath(type, range, period)}>
+          <Link className="btn-primary" to={printReportPath(type, range, period, basis)}>
             Print
           </Link>
         </div>
@@ -95,8 +96,11 @@ export function ReportsPage() {
         </ul>
       </nav>
 
-      {trends ? (
-        <PeriodBar period={period} today={today} onChange={(p) => go({ period: p })} />
+      {byPeriod ? (
+        <div className="flex flex-wrap items-end gap-3">
+          <PeriodBar period={period} today={today} onChange={(p) => go({ period: p })} />
+          {type === 'profit' && <BasisSwitch basis={basis} onChange={(b) => go({ basis: b })} />}
+        </div>
       ) : (
       <fieldset className="flex flex-wrap items-end gap-3">
         <legend className="sr-only">Date range</legend>
@@ -152,6 +156,30 @@ export function ReportsPage() {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// Profit on money collected (cash view) or on what was billed (accrual view).
+function BasisSwitch({ basis, onChange }: { basis: ProfitBasis; onChange: (b: ProfitBasis) => void }) {
+  return (
+    <div>
+      <span className="label" id="basis-label">
+        Income
+      </span>
+      <div role="group" aria-labelledby="basis-label" className="inline-flex overflow-hidden rounded-lg border border-slate-300">
+        {(['collected', 'billed'] as const).map((b) => (
+          <button
+            key={b}
+            type="button"
+            aria-pressed={b === basis}
+            onClick={() => onChange(b)}
+            className={`border-l border-slate-300 px-3 py-1.5 text-sm font-medium first:border-l-0 ${b === basis ? 'bg-brand-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'}`}
+          >
+            {BASIS_LABEL[b]}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }

@@ -15,6 +15,7 @@ const NAV = [
   { to: '/patients', label: 'Patients', icon: '☺' },
   { to: '/calendar', label: 'Calendar', icon: '▤' },
   { to: '/billing', label: 'Billing', icon: '₹' },
+  { to: '/expenses', label: 'Expenses', icon: '⇩' },
   { to: '/stock', label: 'Stock', icon: '⚗' },
   { to: '/reports', label: 'Reports', icon: '▥' },
   { to: '/settings', label: 'Settings', icon: '⚙' },

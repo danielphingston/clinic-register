@@ -17,18 +17,20 @@ import {
   trendsData,
   type TrendTotals,
 } from './reportQueries'
+import { ALERT_MIN, ALERT_PERIODS, ALERT_RISE, BASIS_LABEL, profitData, type ProfitBasis, type ProfitTotals } from './profitQueries'
 import { EXPECT_BACK_DAYS, FOLLOW_UP_DAYS, remedyKey, trendsInsights, WEEKDAYS, type InsightTotals, type TrendsInsights } from './trendsQueries'
 
 // A report rendered as data, so the screen, the print view and the Excel
 // export all show the same thing.
 
-export type ReportType = 'op-register' | 'trends' | 'patients' | 'revenue' | 'dues' | 'top-remedies' | 'stock' | 'appointments'
+export type ReportType = 'op-register' | 'trends' | 'patients' | 'revenue' | 'profit' | 'dues' | 'top-remedies' | 'stock' | 'appointments'
 
 export const REPORTS: { type: ReportType; label: string }[] = [
   { type: 'op-register', label: 'OP Register' },
   { type: 'trends', label: 'Trends' },
   { type: 'patients', label: 'Patients' },
   { type: 'revenue', label: 'Revenue' },
+  { type: 'profit', label: 'Profit & loss' },
   { type: 'dues', label: 'Dues' },
   { type: 'top-remedies', label: 'Top remedies' },
   { type: 'stock', label: 'Stock' },
@@ -40,6 +42,9 @@ export const REPORT_LABEL = Object.fromEntries(REPORTS.map((r) => [r.type, r.lab
 export function isReportType(s: string | null | undefined): s is ReportType {
   return !!s && s in REPORT_LABEL
 }
+
+// Reports chosen by period (week / month / quarter / year) rather than a date range.
+export const isPeriodReport = (t: ReportType) => t === 'trends' || t === 'profit'
 
 // 'change' is a signed fraction (0.12 = +12%), for period-on-period changes.
 export type ColType = 'text' | 'int' | 'money' | 'qty' | 'date' | 'percent' | 'change'
@@ -62,6 +67,8 @@ export interface ReportTable {
   tones?: ('warn' | 'bad' | undefined)[]
   // Numeric columns shaded by value, as a heatmap (screen + print).
   heat?: string[]
+  // Shown instead of the default when there are no rows.
+  empty?: string
 }
 
 export interface Tile {
@@ -116,6 +123,13 @@ export interface ReportResult {
 
 // Validated categorical order (brand green first).
 export const SERIES_COLORS = ['#17805e', '#c2410c', '#6366f1', '#0891b2']
+
+// Expense categories, by their fixed position in the category list (so a
+// category keeps its colour whatever else was spent). The first four are the
+// series colours; the set was checked for colour-blind separation. Past eight,
+// categories share a neutral grey.
+export const CATEGORY_COLORS = [...SERIES_COLORS, '#ca8a04', '#db2777', '#65a30d', '#9333ea']
+export const categoryColor = (index: number) => CATEGORY_COLORS[index] ?? '#64748b'
 
 export function formatCell(v: Cell, type: ColType): string {
   if (v == null || v === '') return ''
@@ -183,13 +197,15 @@ export function formatTile(t: Tile): string {
 
 const sumBy = (rows: Record<string, Cell>[], key: string) => Math.round(rows.reduce((s, r) => s + (Number(r[key]) || 0), 0) * 100) / 100
 
-// `period` is used by the Trends report only (default: the current month);
-// the other reports use `range`.
-export async function buildReport(type: ReportType, range: DateRange, today = todayISO(), period?: Period): Promise<ReportResult> {
+// `period` is used by the Trends and Profit & loss reports (default: the
+// current month), `basis` by Profit & loss only; the other reports use `range`.
+export async function buildReport(type: ReportType, range: DateRange, today = todayISO(), period?: Period, basis: ProfitBasis = 'collected'): Promise<ReportResult> {
   const base = { type, title: REPORT_LABEL[type], range }
   switch (type) {
     case 'trends':
       return trendsReport(period ?? periodOf('month', today), today)
+    case 'profit':
+      return profitReport(period ?? periodOf('month', today), today, basis)
     case 'op-register': {
       const rows = await opRegister(range)
       const table: ReportTable = {
@@ -875,4 +891,207 @@ function trendSections(ins: TrendsInsights, w: Windows): ReportSection[] {
       ],
     },
   ]
+}
+
+// ---- profit & loss ----
+
+async function profitReport(period: Period, today: string, basis: ProfitBasis): Promise<ReportResult> {
+  const d = await profitData(period, today, basis)
+  const { current: cw, previous: pw, lastYear: lw } = d.windows
+  const c = d.current
+  const g = d.granularity
+  const unit = g === 'day' ? 'day' : g === 'week' ? 'week' : 'month'
+  const bucketName = (b: (typeof d.buckets)[number]) => (g === 'month' ? bucketLabel(b.key) : bucketLabel(b.from))
+  const incomeLabel = `Income (${BASIS_LABEL[basis].toLowerCase()})`
+  const tile = (label: string, type: Tile['type'], get: (t: ProfitTotals) => number | null, extra: Partial<Tile> = {}): Tile => ({
+    label,
+    type,
+    value: get(c),
+    compare: [
+      { label: pw.label, value: get(d.previous) },
+      { label: lw.label, value: get(d.lastYear) },
+    ],
+    ...extra,
+  })
+  // Categories with spending in any of the three windows, in list order.
+  const spent = d.categories
+    .map((cat, i) => ({ cat, color: categoryColor(i) }))
+    .filter(({ cat }) => c.byCategory[cat.id] || d.previous.byCategory[cat.id] || d.lastYear.byCategory[cat.id])
+  const inPeriod = spent.filter(({ cat }) => c.byCategory[cat.id])
+  const alerting = new Set(d.alerts.map((a) => a.category.id))
+  const expenses = c.expenses || 1
+  const inProgress = d.windows.partial
+    ? `${cw.label} is still running, so it is counted to today and compared with the same days of ${pw.label} and ${lw.label}.`
+    : `Compared with ${pw.label} and ${lw.label}.`
+  const basisNote =
+    basis === 'collected'
+      ? 'Income = payments received in the period, whatever the bill date.'
+      : 'Income = bills dated in the period, after discount, whether paid yet or not.'
+
+  return {
+    type: 'profit',
+    title: `Profit & loss: ${cw.label}`,
+    range: cw.range,
+    note: `${inProgress} ${basisNote} Expenses = expenses dated in the period. Break-even visits = fixed costs ÷ (income − variable costs) per visit. Fixed costs are categories marked fixed (rent, electricity).`,
+    tiles: [
+      tile(incomeLabel, 'money', (t) => t.income),
+      tile('Expenses', 'money', (t) => t.expenses, { lowerIsBetter: true, hint: `${formatINR(c.fixed)} fixed` }),
+      tile('Net profit', 'money', (t) => t.net),
+      tile('Profit margin', 'percent', (t) => t.margin),
+      tile('Cost per visit', 'money', (t) => t.costPerVisit, { lowerIsBetter: true, hint: `${c.visits} visits` }),
+      tile('Break-even visits', 'int', (t) => t.breakEvenVisits, {
+        lowerIsBetter: true,
+        hint: c.breakEvenVisits == null ? 'Not enough income or visits' : c.visits >= c.breakEvenVisits ? `Covered: ${c.visits} visits` : `${c.breakEvenVisits - c.visits} more than the ${c.visits} so far`,
+      }),
+    ],
+    charts: [
+      {
+        kind: 'bar',
+        stacked: true,
+        money: true,
+        title: `Expenses per ${unit}, with ${BASIS_LABEL[basis].toLowerCase()} income`,
+        xKey: 'x',
+        data: d.buckets.map((b) => ({ x: bucketName(b), income: b.income, ...Object.fromEntries(inPeriod.map(({ cat }) => [cat.id, b.byCategory[cat.id] ?? 0])) })),
+        series: [
+          ...inPeriod.map(({ cat, color }) => ({ key: cat.id, label: cat.name, color })),
+          { key: 'income', label: incomeLabel, color: '#64748b', line: true },
+        ],
+      },
+      ...(inPeriod.length
+        ? [
+            {
+              kind: 'hbar' as const,
+              title: 'Where the money went',
+              xKey: 'x',
+              money: true,
+              data: [...inPeriod].sort((a, b) => c.byCategory[b.cat.id] - c.byCategory[a.cat.id]).map(({ cat }) => ({ x: cat.name, amount: c.byCategory[cat.id] })),
+              series: [{ key: 'amount', label: 'Spent', color: SERIES_COLORS[1] }],
+            },
+          ]
+        : []),
+    ],
+    tables: [
+      {
+        title: 'Profit & loss compared',
+        columns: [
+          { key: 'line', header: 'Line', type: 'text' },
+          { key: 'current', header: cw.label, type: 'money' },
+          { key: 'previous', header: pw.label, type: 'money' },
+          { key: 'vsPrevious', header: 'Change', type: 'change' },
+          { key: 'lastYear', header: lw.label, type: 'money' },
+          { key: 'vsLastYear', header: 'Change', type: 'change' },
+        ],
+        rows: (
+          [
+            [incomeLabel, (t: ProfitTotals) => t.income],
+            ['Fixed costs', (t: ProfitTotals) => t.fixed],
+            ['Variable costs', (t: ProfitTotals) => t.variable],
+            ['Total expenses', (t: ProfitTotals) => t.expenses],
+            ['Net profit', (t: ProfitTotals) => t.net],
+          ] as const
+        ).map(([line, get]) => ({
+          line,
+          current: get(c),
+          previous: get(d.previous),
+          vsPrevious: pctChange(get(c), get(d.previous)),
+          lastYear: get(d.lastYear),
+          vsLastYear: pctChange(get(c), get(d.lastYear)),
+        })),
+      },
+      {
+        title: 'Expenses by category',
+        columns: [
+          { key: 'category', header: 'Category', type: 'text' },
+          { key: 'kind', header: 'Cost', type: 'text' },
+          { key: 'current', header: cw.label, type: 'money' },
+          { key: 'share', header: 'Share', type: 'percent' },
+          { key: 'previous', header: pw.label, type: 'money' },
+          { key: 'vsPrevious', header: 'Change', type: 'change' },
+          { key: 'lastYear', header: lw.label, type: 'money' },
+          { key: 'vsLastYear', header: 'Change', type: 'change' },
+        ],
+        rows: spent.map(({ cat }) => {
+          const cur = c.byCategory[cat.id] ?? 0
+          const prev = d.previous.byCategory[cat.id] ?? 0
+          const ly = d.lastYear.byCategory[cat.id] ?? 0
+          return {
+            category: cat.name,
+            kind: cat.fixed ? 'Fixed' : 'Variable',
+            current: cur,
+            share: cur / expenses,
+            previous: prev,
+            vsPrevious: pctChange(cur, prev),
+            lastYear: ly,
+            vsLastYear: pctChange(cur, ly),
+          }
+        }),
+        tones: spent.map(({ cat }) => (alerting.has(cat.id) ? 'warn' : undefined)),
+        totals: { category: 'Total', current: c.expenses, previous: d.previous.expenses, lastYear: d.lastYear.expenses },
+      },
+      {
+        title: `Per ${unit}`,
+        columns: [
+          { key: 'label', header: g === 'day' ? 'Date' : g === 'week' ? 'Week from' : 'Month', type: g === 'month' ? 'text' : 'date' },
+          { key: 'income', header: incomeLabel, type: 'money' },
+          ...inPeriod.map(({ cat }) => ({ key: `cat:${cat.id}`, header: cat.name, type: 'money' as const })),
+          { key: 'expenses', header: 'Expenses', type: 'money' },
+          { key: 'net', header: 'Net', type: 'money' },
+        ],
+        rows: d.buckets.map((b) => ({
+          label: g === 'month' ? bucketLabel(b.key) : b.from,
+          income: b.income,
+          ...Object.fromEntries(inPeriod.map(({ cat }) => [`cat:${cat.id}`, b.byCategory[cat.id] ?? 0])),
+          expenses: b.expenses,
+          net: b.net,
+        })),
+        tones: d.buckets.map((b) => (b.net < 0 ? 'bad' : undefined)),
+        totals: {
+          label: 'Total',
+          income: c.income,
+          ...Object.fromEntries(inPeriod.map(({ cat }) => [`cat:${cat.id}`, c.byCategory[cat.id]])),
+          expenses: c.expenses,
+          net: c.net,
+        },
+      },
+    ],
+    sections: [
+      {
+        title: 'Cash',
+        note: 'Cash collected from patients less expenses paid in cash: what the cash drawer should have gained (or lost) over the period.',
+        tiles: [
+          tile('Cash collected', 'money', (t) => t.cashIn),
+          tile('Cash spent', 'money', (t) => t.cashOut, { lowerIsBetter: true }),
+          tile('Net cash', 'money', (t) => round2(t.cashIn - t.cashOut)),
+        ],
+        charts: [],
+        tables: [],
+      },
+      {
+        title: 'Spending alerts',
+        note: `Categories more than ${ALERT_RISE * 100}% (and ${formatINR(ALERT_MIN)}) above their average over the previous ${ALERT_PERIODS} ${unitPlural(period)}, counted over the same days.`,
+        tiles: [],
+        charts: [],
+        tables: [
+          {
+            title: 'Above their usual level',
+            columns: [
+              { key: 'category', header: 'Category', type: 'text' },
+              { key: 'amount', header: cw.label, type: 'money' },
+              { key: 'average', header: `Average of previous ${ALERT_PERIODS}`, type: 'money' },
+              { key: 'rise', header: 'Above average', type: 'change' },
+            ],
+            rows: d.alerts.map((a) => ({ category: a.category.name, amount: a.amount, average: a.average, rise: a.rise })),
+            empty: 'No category is well above its usual level.',
+            tones: d.alerts.map(() => 'warn'),
+          },
+        ],
+      },
+    ],
+  }
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100
+
+function unitPlural(p: Period): string {
+  return `${p.kind}s`
 }

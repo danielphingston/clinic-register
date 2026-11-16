@@ -26,14 +26,16 @@ export interface AddAttachmentResult {
 
 // Compression runs first: IndexedDB transactions auto-commit across the
 // awaits a canvas/pdf.js pipeline needs, so only the writes share the tx.
-export async function addAttachment(input: AddAttachmentInput): Promise<AddAttachmentResult> {
-  const patient = await db.patients.get(input.patientId)
-  if (!patient || patient.deleted) throw new AttachmentError('Patient not found')
+async function storeAttachment(
+  link: Pick<Attachment, 'patientId' | 'visitId' | 'expenseId'>,
+  input: { kind: AttachmentKind; file: File; caption?: string; keepOriginal?: boolean },
+): Promise<AddAttachmentResult> {
   const result = await compressFile(input.file, { keepOriginal: input.keepOriginal })
   const hash = await sha256Hex(result.blob)
   const attachment = newRecord<Attachment>({
-    patientId: input.patientId,
-    ...(input.visitId ? { visitId: input.visitId } : {}),
+    patientId: link.patientId,
+    ...(link.visitId ? { visitId: link.visitId } : {}),
+    ...(link.expenseId ? { expenseId: link.expenseId } : {}),
     kind: input.kind,
     mime: result.mime,
     fileName: result.compressed ? renameForMime(input.file.name, result.mime) : input.file.name,
@@ -51,6 +53,19 @@ export async function addAttachment(input: AddAttachmentInput): Promise<AddAttac
     await db.attachments.add(attachment)
   })
   return { attachment, result, deduped }
+}
+
+export async function addAttachment(input: AddAttachmentInput): Promise<AddAttachmentResult> {
+  const patient = await db.patients.get(input.patientId)
+  if (!patient || patient.deleted) throw new AttachmentError('Patient not found')
+  return storeAttachment({ patientId: input.patientId, visitId: input.visitId }, input)
+}
+
+// A receipt photo (or PDF) for a clinic expense. It has no patient.
+export async function addExpenseReceipt(expenseId: string, file: File, keepOriginal = false): Promise<AddAttachmentResult> {
+  const expense = await db.expenses.get(expenseId)
+  if (!expense || expense.deleted) throw new AttachmentError('Expense not found')
+  return storeAttachment({ patientId: '', expenseId }, { kind: 'other', file, caption: 'Receipt', keepOriginal })
 }
 
 export async function updateCaption(id: string, caption: string): Promise<void> {

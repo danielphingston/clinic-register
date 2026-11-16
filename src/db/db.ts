@@ -6,10 +6,12 @@ import type {
   Attachment,
   Bill,
   Certificate,
+  Expense,
   KV,
   Patient,
   Payment,
   PrescriptionItem,
+  RecurringExpense,
   Remedy,
   StockItem,
   StockMove,
@@ -30,6 +32,8 @@ export class ClinicDB extends Dexie {
   stockItems!: EntityTable<StockItem, 'id'>
   stockMoves!: EntityTable<StockMove, 'id'>
   certificates!: EntityTable<Certificate, 'id'>
+  expenses!: EntityTable<Expense, 'id'>
+  recurringExpenses!: EntityTable<RecurringExpense, 'id'>
   kv!: EntityTable<KV, 'key'>
 
   // A name other than the default is only used by tests (e.g. a second
@@ -64,6 +68,13 @@ export class ClinicDB extends Dexie {
       )
     // v3: issued certificates.
     this.version(3).stores({ certificates: 'id, &certNo, patientId, visitId, date, updatedAt, deleted' })
+    // v4: clinic expenses, recurring (monthly) expenses, and receipt photos
+    // as attachments linked by expenseId.
+    this.version(4).stores({
+      expenses: 'id, date, category, recurringId, updatedAt, deleted',
+      recurringExpenses: 'id, updatedAt, deleted',
+      attachments: 'id, patientId, visitId, expenseId, blobHash, updatedAt, deleted',
+    })
     installChangeTracking(this, SYNCED_TABLES)
   }
 }
@@ -81,6 +92,8 @@ export const SYNCED_TABLES = [
   'stockItems',
   'stockMoves',
   'certificates',
+  'expenses',
+  'recurringExpenses',
 ] as const
 
 export type SyncedTable = (typeof SYNCED_TABLES)[number]

@@ -28,7 +28,7 @@ export function ReportTableView({ table, print = false }: { table: ReportTable; 
             {table.rows.length === 0 && (
               <tr>
                 <td colSpan={table.columns.length} className={`${cellPad} text-slate-500`}>
-                  No records in this range. Try a wider date range.
+                  {table.empty ?? 'No records in this range. Try a wider date range.'}
                 </td>
               </tr>
             )}

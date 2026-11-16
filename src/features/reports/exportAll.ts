@@ -3,6 +3,8 @@ import type { BaseRecord } from '../../db/types'
 import { toISODate, todayISO } from '../../lib/format'
 import { remedyMap } from '../remedies/remedyRepo'
 import { checklistSummary, statusSummary } from '../visits/caseNotes'
+import { allCategories, categoryName, EXPENSE_MODE_LABEL } from '../expenses/expenseLogic'
+import { getSettings } from '../../db/repo'
 import { buildSheetsWorkbook } from './excel'
 
 type Row = Record<string, string | number | undefined>
@@ -12,7 +14,7 @@ const live = <T extends BaseRecord>(rows: T[]) => rows.filter((r) => r.deleted =
 // Every live record, one sheet per table, for the clinic's own records.
 // Dates stay ISO (YYYY-MM-DD) so the sheets sort and filter correctly.
 export async function allDataSheets(): Promise<{ name: string; rows: Row[] }[]> {
-  const [patients, visits, rx, bills, payments, stockItems, stockMoves] = await Promise.all([
+  const [patients, visits, rx, bills, payments, stockItems, stockMoves, expenses, settings] = await Promise.all([
     db.patients.toArray(),
     db.visits.toArray(),
     db.prescriptionItems.toArray(),
@@ -20,7 +22,10 @@ export async function allDataSheets(): Promise<{ name: string; rows: Row[] }[]> 
     db.payments.toArray(),
     db.stockItems.toArray(),
     db.stockMoves.toArray(),
+    db.expenses.toArray(),
+    getSettings(),
   ])
+  const categories = allCategories(settings.expenseCategories)
   const remedies = await remedyMap()
   const opNo = new Map(patients.map((p) => [p.id, p.opNo]))
   const name = new Map(patients.map((p) => [p.id, p.name]))
@@ -104,6 +109,12 @@ export async function allDataSheets(): Promise<{ name: string; rows: Row[] }[]> 
       rows: live(stockMoves)
         .sort(byDate)
         .map((m) => ({ Date: m.date, Item: stockLabel.get(m.stockItemId), Reason: m.reason, Change: m.delta, Note: m.note })),
+    },
+    {
+      name: 'Expenses',
+      rows: live(expenses)
+        .sort(byDate)
+        .map((e) => ({ Date: e.date, Category: categoryName(categories, e.category), Amount: e.amount, 'Paid via': EXPENSE_MODE_LABEL[e.mode], Note: e.note, 'For month': e.forMonth })),
     },
   ]
 }

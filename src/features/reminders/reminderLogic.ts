@@ -1,14 +1,17 @@
 // Pure reminder rules shared by the app and the service worker (no DOM, no db).
 
-export type ReminderType = 'appointments' | 'followups' | 'dues' | 'lowStock'
+import { dueRecurring, paidKey, type RecurringRule } from '../expenses/expenseLogic'
 
-export const REMINDER_TYPES: ReminderType[] = ['appointments', 'followups', 'dues', 'lowStock']
+export type ReminderType = 'appointments' | 'followups' | 'dues' | 'lowStock' | 'expenses'
+
+export const REMINDER_TYPES: ReminderType[] = ['appointments', 'followups', 'dues', 'lowStock', 'expenses']
 
 export const REMINDER_LABEL: Record<ReminderType, string> = {
   appointments: 'Appointments today',
   followups: 'Follow-ups due',
   dues: 'Overdue dues',
   lowStock: 'Low stock',
+  expenses: 'Expenses due',
 }
 
 export const REMINDER_URL: Record<ReminderType, string> = {
@@ -16,6 +19,7 @@ export const REMINDER_URL: Record<ReminderType, string> = {
   followups: '/#followups',
   dues: '/billing/dues',
   lowStock: '/stock?filter=low',
+  expenses: '/expenses',
 }
 
 export type ReminderCounts = Record<ReminderType, number>
@@ -31,12 +35,16 @@ export interface ReminderData {
   visits: (Live & { patientId: string; date: string; createdAt: number; followUpDate?: string })[]
   bills: (Live & { patientId: string; balance: number; date: string; dueDate?: string })[]
   stockItems: (Live & { qty: number; lowStockAt: number })[]
+  // Absent when the database predates expenses.
+  recurringExpenses?: RecurringRule[]
+  recurringPaid?: (Live & { recurringId?: string; forMonth?: string; date: string })[]
 }
 
 // - appointments: booked (not yet arrived) and starting today
 // - followups: the patient's latest visit asks for a follow-up on or before today
 // - dues: patients with a bill past its due date (same rule as billing's isOverdue)
 // - lowStock: items at or below their low-stock level
+// - expenses: recurring expense months past their due day with no payment recorded
 export function countReminders(data: ReminderData, today: string, dayStart: number, dayEnd: number): ReminderCounts {
   const live = new Set(data.patients.filter((p) => p.deleted === 0).map((p) => p.id))
   const appointments = data.appointments.filter(
@@ -55,7 +63,9 @@ export function countReminders(data: ReminderData, today: string, dayStart: numb
     data.bills.filter((b) => b.deleted === 0 && b.balance > 0 && (b.dueDate ?? b.date) < today && live.has(b.patientId)).map((b) => b.patientId),
   )
   const lowStock = data.stockItems.filter((s) => s.deleted === 0 && s.qty <= s.lowStockAt).length
-  return { appointments, followups, dues: overdue.size, lowStock }
+  const paid = new Set((data.recurringPaid ?? []).filter((e) => e.deleted === 0 && e.recurringId).map((e) => paidKey(e.recurringId!, e.forMonth ?? e.date.slice(0, 7))))
+  const expenses = dueRecurring(data.recurringExpenses ?? [], paid, today).length
+  return { appointments, followups, dues: overdue.size, lowStock, expenses }
 }
 
 export function totalReminders(c: ReminderCounts): number {
@@ -73,6 +83,8 @@ export function reminderText(type: ReminderType, n: number): string {
       return `${n} patient${s} with overdue dues`
     case 'lowStock':
       return `${n} stock item${s} low or out`
+    case 'expenses':
+      return `${n} recurring expense${s} to record`
   }
 }
 
@@ -89,7 +101,7 @@ export interface NotifyPrefs {
 
 export const DEFAULT_PREFS: NotifyPrefs = {
   enabled: false,
-  types: { appointments: true, followups: true, dues: true, lowStock: true },
+  types: { appointments: true, followups: true, dues: true, lowStock: true, expenses: true },
   quietStart: '',
   quietEnd: '',
 }

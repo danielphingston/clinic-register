@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ClinicDB, db as appDb } from '../db/db'
 import { getSettings, newRecord, saveSettings } from '../db/repo'
-import type { Attachment, Bill, Patient, Payment, StockItem, StockMove } from '../db/types'
+import type { Attachment, Bill, Expense, Patient, Payment, RecurringExpense, StockItem, StockMove } from '../db/types'
 import { createPatient } from '../features/patients/patientRepo'
 import { sha256Hex } from '../lib/compress/hash'
 import { NOTICES_KEY } from './apply'
@@ -341,6 +341,32 @@ describe('blobs', () => {
     await eb.sync()
     expect((await B.attachments.get(a.id))?.deleted).toBe(1)
     expect(await B.blobs.get(hash)).toBeUndefined()
+  })
+
+  it('syncs expenses, recurring expenses and expense receipts to another device', async () => {
+    const drive = new FakeDrive()
+    const A = device('a')
+    const B = device('b')
+    const rent = newRecord<RecurringExpense>({ category: 'rent', amount: 15000, day: 5, mode: 'bank', startMonth: '2026-01' })
+    const paid = newRecord<Expense>({ date: '2026-10-05', category: 'rent', amount: 15000, mode: 'bank', recurringId: rent.id, forMonth: '2026-10' })
+    await A.recurringExpenses.add(rent)
+    await A.expenses.add(paid)
+    // A receipt has no patient; it is linked to the expense.
+    const { a, hash } = await addBlobAttachment(A, '', 'receipt-bytes')
+    await A.attachments.update(a.id, { expenseId: paid.id })
+
+    const ra = await engine(A, drive, 'A').sync()
+    expect(ra.pushed).toEqual(expect.arrayContaining(['expenses', 'recurringExpenses', 'attachments']))
+    expect(ra.blobsUploaded).toBe(1)
+
+    const eb = engine(B, drive, 'B')
+    eb.queueMissingBlobs = async () => 0
+    await eb.sync()
+    expect(await B.expenses.get(paid.id)).toMatchObject({ amount: 15000, recurringId: rent.id, forMonth: '2026-10' })
+    expect(await B.recurringExpenses.get(rent.id)).toMatchObject({ day: 5, startMonth: '2026-01' })
+    expect(await B.attachments.where('expenseId').equals(paid.id).count()).toBe(1)
+    expect(await eb.requestBlob(hash)).toBe(true)
+    expect(await (await B.blobs.get(hash))!.blob.text()).toBe('receipt-bytes')
   })
 
   it('downloads missing blobs in the background after a restore', async () => {
