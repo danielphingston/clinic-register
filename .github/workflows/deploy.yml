@@ -16,7 +16,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The same checks as every pull request (ci.yml): lint, tests and a build.
+  # Nothing is built for Pages or published unless they pass.
+  checks:
+    uses: ./.github/workflows/ci.yml
+
   build:
+    needs: checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,10 +33,6 @@ jobs:
           cache: npm
 
       - run: npm ci
-
-      - run: npm run lint
-
-      - run: npm test
 
       - name: Build
         run: npm run build

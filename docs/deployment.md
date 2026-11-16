@@ -41,7 +41,12 @@ These are build-time variables, which Vite inlines into the bundle. Set them in 
 
 ## 3a. GitHub Pages
 
-`.github/workflows/deploy.yml` runs lint, tests and the build on every push to `master`, then publishes to `https://<user>.github.io/<repo>/`.
+Two workflows:
+
+- `.github/workflows/ci.yml` (**CI**) validates every change: `npm ci`, lint, the full test suite and a production build, which also type-checks the app and the service worker. It runs on every pull request and on pushes to branches other than `master`, and a newer push cancels the older run.
+- `.github/workflows/deploy.yml` runs on every push to `master` (or by hand). It first calls CI, then builds for Pages and publishes to `https://<user>.github.io/<repo>/`. If lint, a test or the build fails, nothing is published and the live site stays as it was.
+
+To stop failing pull requests being merged, require the check in **Settings → Rules → Rulesets** (or **Branches → Branch protection rules**) for `master`: add **Require status checks to pass** and choose **Lint, test and build**.
 
 One-time setup:
 

@@ -1,0 +1,47 @@
+name: CI
+
+# Validates every change: lint, tests and a production build (which also
+# type-checks the app and the service worker). Runs on pull requests and
+# branch pushes, and is called by the deploy workflow, which publishes only
+# if this passes.
+on:
+  pull_request:
+  push:
+    # master is validated by the deploy workflow, which calls this one.
+    branches-ignore: [master]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch or PR cancels the older run. When the
+# deploy workflow calls this one, github.workflow is the caller's name, so
+# deploy checks get their own group and are never cancelled.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.workflow == 'CI' }}
+
+jobs:
+  checks:
+    name: Lint, test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build (type-check and bundle)
+        run: npm run build
