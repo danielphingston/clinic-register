@@ -116,6 +116,9 @@ export interface Attachment extends BaseRecord {
   blobHash: string
   caption?: string
   pages?: number // PDFs only, when known
+  // Receipt photos of clinic expenses carry the expense id instead of a
+  // patient (patientId is ''), so they sync and back up like any attachment.
+  expenseId?: string
 }
 
 // Content-addressed file store. Not a BaseRecord: blobs are immutable and
@@ -170,6 +173,46 @@ export interface Payment extends BaseRecord {
   mode: PaymentMode
   date: string
   receiptNo: string
+}
+
+// How an expense was paid: the patient payment modes plus bank transfer.
+export type ExpenseMode = PaymentMode | 'bank'
+
+// A clinic expense (rent, electricity, supplies, staff...). `category` is an
+// ExpenseCategory id.
+export interface Expense extends BaseRecord {
+  date: string // ISO date paid
+  category: string
+  amount: number
+  mode: ExpenseMode
+  note?: string
+  // Set when recorded from a recurring expense: the rule and the month paid for.
+  recurringId?: string
+  forMonth?: string // YYYY-MM
+}
+
+// A monthly expense such as rent, due on `day` of each month (the last day
+// for short months) from `startMonth`. Payments are recorded by hand ("Mark
+// paid"), never automatically.
+export interface RecurringExpense extends BaseRecord {
+  category: string
+  amount: number
+  day: number // 1–31
+  mode: ExpenseMode
+  note?: string
+  startMonth: string // YYYY-MM
+  paused?: boolean
+  skipped?: string[] // YYYY-MM months marked "not this month"
+}
+
+// Built-in categories have fixed ids; added ones get random ids. `fixed`
+// marks costs that don't move with patient numbers (rent), used for the
+// break-even and fixed-vs-variable figures.
+export interface ExpenseCategory {
+  id: string
+  name: string
+  fixed: boolean
+  archived?: boolean // removed: no longer offered, kept for old expenses
 }
 
 export interface Remedy extends BaseRecord {
@@ -286,6 +329,8 @@ export interface ClinicSettings {
   certPlace: string
   certWatermark: boolean
   certTypes: Record<CertificateKind, CertTypeSettings>
+  // Expense categories added by the clinic; the built-in ones are not stored.
+  expenseCategories?: ExpenseCategory[]
 }
 
 // Key/value store for settings, sequence counters and sync metadata.

@@ -7,6 +7,7 @@ import { seedRemedies, seedRemedyId } from '../remedies/remedyRepo'
 import { buildReport, changeLine, formatCell, pctChange, tileChange, type ReportResult } from './reportDefs'
 import { periodOf } from '../../lib/period'
 import { buildReportWorkbook, buildSheetsWorkbook, reportFileName, safeSheetName } from './excel'
+import { addExpense } from '../expenses/expenseRepo'
 import { allDataSheets } from './exportAll'
 import { printReportPath, readReportState, reportSearch } from './reportUrl'
 
@@ -103,11 +104,15 @@ describe('Excel export', () => {
 
   it('exports all data, one sheet per table', async () => {
     await fixture()
+    await addExpense({ category: 'rent', amount: 15000, date: '2026-10-05', mode: 'bank', note: 'Landlord' })
     const wb = roundTrip(buildSheetsWorkbook(XLSX, await allDataSheets()))
-    expect(wb.SheetNames).toEqual(['Patients', 'Visits', 'Prescriptions', 'Bills', 'Payments', 'Stock', 'Stock moves'])
+    expect(wb.SheetNames).toEqual(['Patients', 'Visits', 'Prescriptions', 'Bills', 'Payments', 'Stock', 'Stock moves', 'Expenses'])
     const bills = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets.Bills)
     expect(bills[0]).toMatchObject({ Date: '2026-10-01', Name: 'Asha', Total: 300.5, Paid: 300.5, Balance: 0 })
     expect(XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets.Stock, { header: 1 })).toEqual([['(no records)']])
+    expect(XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets.Expenses)).toEqual([
+      { Date: '2026-10-05', Category: 'Rent', Amount: 15000, 'Paid via': 'Bank transfer', Note: 'Landlord' },
+    ])
   })
 })
 
@@ -119,6 +124,7 @@ describe('report URL state', () => {
       preset: 'thisMonth',
       range: { from: '2026-10-01', to: today },
       period: { kind: 'month', start: '2026-10-01', fy: false },
+      basis: 'collected',
     })
     expect(readReportState(new URLSearchParams('report=revenue&range=lastMonth'), today)).toMatchObject({ type: 'revenue', range: { from: '2026-09-01', to: '2026-09-30' } })
     expect(readReportState(new URLSearchParams('report=x&range=custom&from=2026-10-31&to=2026-10-02'), today)).toMatchObject({
@@ -146,6 +152,21 @@ describe('report URL state', () => {
     expect(reportSearch({ type: 'trends', preset: 'thisMonth', range: s, period })).toBe('?report=trends&period=quarter&at=2026-07-01&fy=1')
     expect(printReportPath('trends', s, period)).toBe('/print/report/trends?period=quarter&at=2026-07-01&fy=1')
     expect(printReportPath('revenue', s, period)).toBe('/print/report/revenue?from=2026-07-01&to=2026-09-30')
+  })
+
+  it('keeps the Profit & loss period and income basis in the URL', () => {
+    const read = (q: string) => readReportState(new URLSearchParams(q), today)
+    expect(read('report=profit&period=year&at=2026-02-01')).toMatchObject({ type: 'profit', period: { kind: 'year', start: '2026-01-01', fy: false }, basis: 'collected' })
+    expect(read('report=profit&basis=billed').basis).toBe('billed')
+    expect(read('report=profit&basis=nonsense').basis).toBe('collected')
+
+    const period = { kind: 'month' as const, start: '2026-09-01', fy: false }
+    const s: ReportResult['range'] = { from: '2026-09-01', to: '2026-09-30' }
+    // Collected is the default, so it stays out of the URL.
+    expect(reportSearch({ type: 'profit', preset: 'thisMonth', range: s, period, basis: 'collected' })).toBe('?report=profit&period=month&at=2026-09-01')
+    expect(reportSearch({ type: 'profit', preset: 'thisMonth', range: s, period, basis: 'billed' })).toBe('?report=profit&period=month&at=2026-09-01&basis=billed')
+    expect(reportSearch({ type: 'trends', preset: 'thisMonth', range: s, period, basis: 'billed' })).toBe('?report=trends&period=month&at=2026-09-01')
+    expect(printReportPath('profit', s, period, 'billed')).toBe('/print/report/profit?period=month&at=2026-09-01&basis=billed')
   })
 })
 

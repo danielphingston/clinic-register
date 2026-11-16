@@ -10,12 +10,13 @@ An offline-first outpatient register for homeopathy clinics. It covers patients,
 - **Visits**: tabbed case notes (complaint, history, mentals, generals, modalities, constitution) and prescriptions. Remedy autocomplete, potency, dose and repetition presets, "repeat last prescription" and follow-up dates speed these up.
 - **Appointments**: day, week and month calendar, with overlap checks when booking, walk-ins, and a token-based daily queue.
 - **Billing**: bills from visits or counter sales, discounts, part payments, receipts, voids and reversals. The dues list shows how long each amount has been outstanding.
+- **Expenses**: rent, electricity, supplies, temporary staff and your own categories, with receipt photos, monthly recurring payments that remind you when due, spending alerts and cash in hand.
 - **Stock**: medicines by remedy, potency and form, with purchases, adjustments, dispensing history and low-stock alerts.
 - **Certificates**: numbered medicine and medical (rest) certificates with editable wording, the clinic letterhead, an optional signature and seal, and a logo watermark.
 - **WhatsApp messaging**: due-payment reminders and custom message templates (greetings, follow-up reminders and similar), with placeholders filled in automatically.
-- **Reports**: OP register, revenue, collections, dues, top remedies, stock usage and appointments, with charts, A4 printing and Excel export.
+- **Reports**: OP register, trends, revenue, profit & loss (on collected or billed income: net profit, margin, cost per visit, break-even visits), collections, dues, top remedies, stock usage and appointments, with charts, A4 printing and Excel export.
 - **Attachments**: photos and PDFs per patient or visit, compressed on the device.
-- **Reminders**: in-app alerts and optional daily notifications for appointments, follow-ups, overdue dues and low stock.
+- **Reminders**: in-app alerts and optional daily notifications for appointments, follow-ups, overdue dues, low stock and recurring expenses due.
 - **Sync and backup**: works fully offline and syncs automatically across devices through Google Drive. The Drive copy can be encrypted, and JSON backup/restore and a full Excel export are built in.
 
 ## Privacy

@@ -8,6 +8,9 @@
 - Attachment blobs are content-addressed (SHA-256) and write-once. Never modify a stored blob; only its `synced` flag changes.
 - **Counter sales**: a bill line with `sale: true` takes its quantity out of stock through a `dispense` move whose `refId` is the bill id. Editing the bill corrects the move and voiding returns the stock (`syncBillSale` in `stockRepo.ts`). Lines copied from a visit don't set `sale`, because the visit has already moved the stock.
 
+- **Expenses** (`src/features/expenses/`): `expenses` and `recurringExpenses` are synced tables (schema v4). An expense's `category` is a category id. The built-in categories live in code (`BUILTIN_CATEGORIES` in `expenseLogic.ts`); categories the clinic adds are stored in `settings.expenseCategories`, and removing one only archives it. A recurring expense is a monthly rule; a month counts as paid when a live expense carries its `recurringId` and `forMonth`, or as skipped when the month is in the rule's `skipped` list. `dueRecurring` is pure so the service worker's reminder check can use it; the worker opens the database without a schema, so it reads the expense tables inside a try/catch.
+- **Expense receipts** are attachments with `expenseId` set and `patientId` empty, so they go through the same blob store, Drive sync, garbage collection and backups as patient files. Patient and visit attachment lists query by `patientId` or `visitId`, so receipts never show there.
+
 ## Drive sync
 
 - **Engine**: `src/sync/engine.ts`. `SyncEngine` takes a `ClinicDB` and a `DriveClient`, so tests can run two "devices" against `FakeDrive`.
@@ -47,6 +50,8 @@ Shared appointment UI, such as the booking dialogs and the queue, must not impor
 ## Reports
 
 `src/features/reports/reportDefs.ts` builds each report as data from the queries in `reportQueries.ts`. The on-screen view, the print view (`/print/report/:type?from=&to=`) and the Excel export all render that same data.
+
+The Profit & loss report (`profitQueries.ts`) is also chosen by period, with the same URL parameters plus `&basis=billed` (income from bills rather than payments; collected is the default and is left out of the URL). `isPeriodReport()` in `reportDefs.ts` lists the period-based reports. Expense categories get colours from `CATEGORY_COLORS` by their fixed position in the category list, so a category keeps its colour whatever else was spent.
 
 The Trends report is chosen by period rather than date range: `?report=trends&period=week|month|quarter|year&at=<period start>[&fy=1]`, and the print view takes the same parameters. `src/lib/period.ts` defines the periods (weeks start on Monday; `fy` makes years run April to March and numbers quarters from April) and the windows each period is compared with. A period still running is cut at today, and its comparisons (the previous period, and the same period a year back, 52 weeks back for a week) cover the same number of days from their own start.
 

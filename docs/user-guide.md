@@ -6,7 +6,7 @@
 2. **Patient arrives**: find the patient under **Patients**, or add one with **+ New patient**. If they have an appointment, mark it **Arrived** in Today's queue to give them a token. **Start visit** opens the case form.
 3. **Visit**: write the case notes, then add remedies by typing a few letters and pressing Enter. Pick the stock item and quantity to dispense and set a follow-up date. Finish with **Save & print Rx** or **Save & bill**.
 4. **Billing**: the bill is prefilled with the consultation fee and the dispensed medicines. Enter the amount paid now. Any balance gets a due date and appears under **Billing → Dues**. Use **+ Medicine from stock** for a counter sale; voiding or editing the bill returns the stock.
-5. **Evening**: review **Reports → OP Register** for the day and today's collection on the dashboard.
+5. **Evening**: review **Reports → OP Register** for the day and today's collection on the dashboard. Record anything paid out under **Expenses**; **Cash in hand today** there should match the cash drawer.
 
 ## Trends
 
@@ -26,6 +26,37 @@ Below these come four sections, each compared the same way:
 - **Clinical trends**: of the complaints reviewed at follow-up visits, the share better or resolved, the top diagnoses of patients seen, and the most prescribed remedies, each against the previous period.
 
 **Print** and **Export to Excel** include everything: the comparisons print beside each figure, and the Excel **Summary** sheet has the earlier values and changes in their own columns.
+
+## Expenses
+
+**Expenses** (under **More** on a phone) records what the clinic pays out.
+
+- **+ Add expense**: pick a category (**Rent**, **Electricity**, **Supplies**, **Staff (temp)** or **Others**) and enter the amount, date paid, how it was paid (cash, UPI, bank transfer, card or other) and an optional note such as the vendor. **Others** needs a note saying what it was for. **Attach receipt** or **Take photo** keeps a photo or PDF of the bill with the expense. It is compressed like patient attachments and syncs with them. Tap an expense to edit or delete it.
+- **Categories**: add your own, such as Salary, Internet or Maintenance, and tick **Fixed cost** for ones that don't change with the number of patients. Rent and electricity are fixed; supplies, temporary staff and others are variable. Removing a category hides it from new expenses; old expenses keep it.
+- **Recurring**: add rent and other monthly payments with their usual amount and the day they are due. From that day, they appear under **Due to record** (and in the bell) until you **Mark paid**, which lets you change this month's amount, date or mode, or **Skip** the month. **Pause** stops a payment showing as due. Nothing is recorded automatically. If two devices each mark the same month paid before syncing, both payments are kept; delete one.
+- **The month view** (‹ › to change month): money spent (and how much of it fixed), collected, net profit with its margin, and **Cash in hand today** (cash collected today less cash spent today). **By category** shows the split; tap a category to list only its expenses.
+- **Spending alerts**: a category more than 30% (and at least ₹200) above its average over the previous three months, counted over the same days, is flagged above the tiles.
+
+## Profit & loss
+
+**Reports → Profit & loss** (or **Profit & loss report →** on the Expenses page, or the **Net profit this month** tile on the dashboard) works by period like Trends: week, month, quarter or year. Years are calendar years (Jan–Dec) unless you choose **Financial (Apr–Mar)**.
+
+**Income** switches between **Collected**, payments received in the period (what actually came in), and **Billed**, bills dated in the period whether paid yet or not. Collected is the default.
+
+- **Tiles**, each compared with the previous period and the same period last year:
+  - income;
+  - expenses;
+  - **net profit** (income − expenses);
+  - **profit margin** (net ÷ income);
+  - **cost per visit** (expenses ÷ visits);
+  - **break-even visits**: fixed costs ÷ (income − variable costs) per visit, which is how many visits pay for rent and the other fixed costs. The hint says whether the period has reached it yet.
+- **Charts**: expenses per day, week or month stacked by category, with income as a dashed line, and where the money went.
+- **Tables**:
+  - profit and loss compared with earlier periods, split into fixed and variable costs;
+  - expenses by category, with shares and changes (flagged categories highlighted);
+  - each day, week or month with every category, total expenses and net (loss-making rows in red).
+- **Cash**: cash collected less expenses paid in cash.
+- **Spending alerts**: categories well above their average over the previous three periods.
 
 ## Case notes
 

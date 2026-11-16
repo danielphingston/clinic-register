@@ -8,6 +8,8 @@ import { saveVisit, followUpsDue } from '../visits/visitRepo'
 import { createBill, duesByPatient } from '../billing/billingRepo'
 import { createStockItem, lowStockItems } from '../stock/stockRepo'
 import { seedRemedies, seedRemedyId } from '../remedies/remedyRepo'
+import { addRecurring, markRecurringPaid, setRecurringPaused, skipRecurringMonth } from '../expenses/expenseRepo'
+import { shiftMonth } from '../expenses/expenseLogic'
 import { pruneNotifiedKeys, reminderCounts, runReminderCheck, type ReminderNotification } from './reminderCheck'
 import { DEFAULT_PREFS, inQuietHours, notifiedKey, PREFS_KEY, reminderText, withDefaults, type NotifyPrefs } from './reminderLogic'
 
@@ -48,15 +50,32 @@ describe('reminder counts', () => {
   it('matches the app queries for each kind', async () => {
     await fixture()
     const c = await reminderCounts(db, now)
-    expect(c).toEqual({ appointments: 2, followups: 1, dues: 1, lowStock: 1 })
+    expect(c).toEqual({ appointments: 2, followups: 1, dues: 1, lowStock: 1, expenses: 0 })
     expect(c.followups).toBe((await followUpsDue(today)).length)
     expect(c.dues).toBe((await duesByPatient(today)).filter((r) => r.daysOverdue > 0).length)
     expect(c.lowStock).toBe((await lowStockItems()).length)
   })
 
+  it('counts recurring expense months that are due and not yet recorded', async () => {
+    const thisMonth = today.slice(0, 7)
+    const lastMonth = shiftMonth(thisMonth, -1)
+    // Due on the 1st: last month and this month are both due.
+    const rent = await addRecurring({ category: 'rent', amount: 15000, day: 1, mode: 'bank', startMonth: lastMonth })
+    expect((await reminderCounts(db, now)).expenses).toBe(2)
+    await markRecurringPaid(rent.id, lastMonth, { amount: 15000, date: today, mode: 'bank' })
+    expect((await reminderCounts(db, now)).expenses).toBe(1)
+    await skipRecurringMonth(rent.id, thisMonth)
+    expect((await reminderCounts(db, now)).expenses).toBe(0)
+    // A paused rule is never due.
+    const paused = await addRecurring({ category: 'staff', amount: 500, day: 1, mode: 'cash', startMonth: thisMonth })
+    await setRecurringPaused(paused.id, true)
+    expect((await reminderCounts(db, now)).expenses).toBe(0)
+  })
+
   it('texts', () => {
     expect(reminderText('appointments', 1)).toBe('1 appointment today not yet arrived')
     expect(reminderText('dues', 3)).toBe('3 patients with overdue dues')
+    expect(reminderText('expenses', 1)).toBe('1 recurring expense to record')
   })
 })
 
@@ -71,7 +90,7 @@ describe('quiet hours', () => {
     expect(inQuietHours({ quietStart: '21:00', quietEnd: '08:00' }, at(8))).toBe(false)
   })
   it('fills missing prefs with defaults', () => {
-    expect(withDefaults({ enabled: true, types: { dues: false } as NotifyPrefs['types'] }).types).toEqual({ appointments: true, followups: true, dues: false, lowStock: true })
+    expect(withDefaults({ enabled: true, types: { dues: false } as NotifyPrefs['types'] }).types).toEqual({ appointments: true, followups: true, dues: false, lowStock: true, expenses: true })
   })
 })
 

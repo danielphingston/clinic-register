@@ -20,6 +20,7 @@ const Settings = lazyPage(() => import('./features/settings/Settings'), 'Setting
 // FullCalendar is heavy; only CalendarPage imports it.
 const CalendarPage = lazyPage(() => import('./features/appointments/CalendarPage'), 'default')
 const BillingPage = lazyPage(() => import('./features/billing/BillingPage'), 'BillingPage')
+const ExpensesPage = lazyPage(() => import('./features/expenses/ExpensesPage'), 'ExpensesPage')
 const StockPage = lazyPage(() => import('./features/stock/StockPage'), 'StockPage')
 // Recharts and the report builders load with the reports chunk only.
 const ReportsPage = lazyPage(() => import('./features/reports/ReportsPage'), 'ReportsPage')
@@ -75,6 +76,7 @@ const routes = createRoutesFromElements(
       <Route path="calendar" element={<CalendarPage />} />
       <Route path="billing" element={<BillingPage view="bills" />} />
       <Route path="billing/dues" element={<BillingPage view="dues" />} />
+      <Route path="expenses" element={<ExpensesPage />} />
       <Route path="stock/*" element={<StockPage />} />
       <Route path="reports" element={<ReportsPage />} />
       {SeedPage && <Route path="dev/seed" element={<SeedPage />} />}

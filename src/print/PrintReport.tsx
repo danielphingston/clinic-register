@@ -3,8 +3,8 @@ import { useParams, useSearchParams } from 'react-router-dom'
 import { isISODate, rangeLabel } from '../lib/dateRange'
 import { formatDate, todayISO } from '../lib/format'
 import { trendWindows } from '../lib/period'
-import { readPeriod } from '../features/reports/reportUrl'
-import { buildReport, isReportType, REPORT_LABEL } from '../features/reports/reportDefs'
+import { readBasis, readPeriod } from '../features/reports/reportUrl'
+import { buildReport, isPeriodReport, isReportType, REPORT_LABEL } from '../features/reports/reportDefs'
 import { ReportTableView, Tiles } from '../features/reports/ReportTableView'
 import { Letterhead, PrintShell } from './PrintShell'
 
@@ -14,14 +14,15 @@ export default function PrintReport() {
   const today = todayISO()
   const from = params.get('from')
   const to = params.get('to')
-  // Trends is printed by period (?period=…&at=…&fy=1), the rest by date range.
-  const trends = type === 'trends'
+  // Trends and Profit & loss are printed by period (?period=…&at=…&fy=1), the rest by date range.
+  const byPeriod = isReportType(type) && isPeriodReport(type)
   const period = readPeriod(params, today)
-  const range = trends ? trendWindows(period, today).current.range : { from: from!, to: to! }
-  const valid = isReportType(type) && (trends || (isISODate(from) && isISODate(to) && from <= to))
+  const basis = readBasis(params)
+  const range = byPeriod ? trendWindows(period, today).current.range : { from: from!, to: to! }
+  const valid = isReportType(type) && (byPeriod || (isISODate(from) && isISODate(to) && from <= to))
   const report = useLiveQuery(
-    async () => (valid ? buildReport(type, range, today, period) : Promise.resolve(null)),
-    [type, range.from, range.to, period.kind, period.fy, today, valid],
+    async () => (valid ? buildReport(type, range, today, period, basis) : Promise.resolve(null)),
+    [type, range.from, range.to, period.kind, period.fy, basis, today, valid],
   )
 
   if (!valid) return <div className="p-6 text-sm">Unknown report or date range.</div>

@@ -8,6 +8,8 @@ import { createBill, recordPayment } from '../features/billing/billingRepo'
 import { createStockItem, purchase } from '../features/stock/stockRepo'
 import { medicineLineDesc } from '../features/stock/stockLogic'
 import { seedRemedies, seedRemedyId } from '../features/remedies/remedyRepo'
+import { addExpense, addRecurring, markRecurringPaid } from '../features/expenses/expenseRepo'
+import { dueDateIn, shiftMonth } from '../features/expenses/expenseLogic'
 
 // Dev-only demo data, built through the app's own repo functions so stock
 // moves, bill numbers and balances are consistent. Deterministic for a seed.
@@ -54,6 +56,7 @@ export interface SeedResult {
   payments: number
   appointments: number
   stockItems: number
+  expenses: number
 }
 
 export async function seedDemoData({ days = 90, seed = 42, today = todayISO() } = {}): Promise<SeedResult> {
@@ -64,7 +67,7 @@ export async function seedDemoData({ days = 90, seed = 42, today = todayISO() } 
   await saveSettings({ ...settings, clinicName: settings.clinicName || 'Demo Homoeo Clinic', doctorName: settings.doctorName || 'Dr. Demo', consultationFee: settings.consultationFee || 300 })
   const fee = (await getSettings()).consultationFee
   const start = addDays(today, -days)
-  const out: SeedResult = { patients: 0, visits: 0, bills: 0, payments: 0, appointments: 0, stockItems: 0 }
+  const out: SeedResult = { patients: 0, visits: 0, bills: 0, payments: 0, appointments: 0, stockItems: 0, expenses: 0 }
 
   const stock = new Map<string, { id: string; unit: string; price: number }>()
   for (const [name, potency, form, unit, opening, lowStockAt, price] of STOCK) {
@@ -155,5 +158,19 @@ export async function seedDemoData({ days = 90, seed = 42, today = todayISO() } 
     await insert<Appointment>(db.appointments, { patientId: patients[k].id, start: at, end: at + 15 * 60_000, status: 'booked' })
     out.appointments++
   }
+
+  // Rent paid each month (this month left due), electricity and supplies.
+  const months = Math.ceil(days / 30)
+  const thisMonth = today.slice(0, 7)
+  const rent = await addRecurring({ category: 'rent', amount: 15000, day: 5, mode: 'bank', note: 'Landlord', startMonth: shiftMonth(thisMonth, -months) })
+  for (let k = months; k >= 1; k--) {
+    const m = shiftMonth(thisMonth, -k)
+    await markRecurringPaid(rent.id, m, { amount: 15000, date: dueDateIn(m, 5), mode: 'bank' })
+    await addExpense({ category: 'electricity', amount: 1800 + Math.round(rand() * 1400), date: dueDateIn(m, 12), mode: 'upi', note: 'KSEB bill' })
+    await addExpense({ category: 'supplies', amount: 2000 + Math.round(rand() * 3000), date: dueDateIn(m, 20), mode: 'cash', note: 'Bottles, labels, globules' })
+    out.expenses += 3
+  }
+  await addExpense({ category: 'staff', amount: 600, date: today, mode: 'cash', note: 'Helper, Saturday' })
+  out.expenses++
   return out
 }

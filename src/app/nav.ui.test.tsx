@@ -27,7 +27,7 @@ function open(path: string) {
 }
 
 describe('mobile bottom nav', () => {
-  it('has five items; More opens an accessible sheet with Stock, Reports and Settings', async () => {
+  it('has five items; More opens an accessible sheet with Expenses, Stock, Reports and Settings', async () => {
     const user = userEvent.setup()
     open('/')
     const nav = await screen.findByRole('navigation', { name: 'Main' })
@@ -41,8 +41,8 @@ describe('mobile bottom nav', () => {
     await user.click(more)
     const sheet = screen.getByRole('dialog', { name: 'More' })
     expect(more).toHaveAttribute('aria-expanded', 'true')
-    expect(within(sheet).getAllByRole('link').map(label)).toEqual(['Stock', 'Reports', 'Settings'])
-    expect(within(sheet).getByRole('link', { name: 'Stock' })).toHaveFocus()
+    expect(within(sheet).getAllByRole('link').map(label)).toEqual(['Expenses', 'Stock', 'Reports', 'Settings'])
+    expect(within(sheet).getByRole('link', { name: 'Expenses' })).toHaveFocus()
 
     await user.keyboard('{Escape}')
     expect(screen.queryByRole('dialog', { name: 'More' })).toBeNull()
